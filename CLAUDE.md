@@ -170,6 +170,33 @@ Only JDK available in this environment is Temurin 21 - always export
 `JAVA_HOME` inline before any `./gradlew` invocation; never touch the
 Homebrew-default OpenJDK or install a system JDK.
 
+### Tests & coverage
+
+```sh
+export JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home
+./gradlew ":1.21.4-fabric:test"    # run the JUnit 5 suite (active cell only)
+./gradlew ":1.21.4-fabric:check"   # test + JaCoCo coverage verification (100% LINE, enforced)
+```
+
+Tests run only against the active Stonecutter cell (`1.21.4-fabric`) -
+never across the whole matrix; switch cells only via
+`./gradlew "Set active project to <cell>"`, then switch back. Coverage
+report: `versions/1.21.4-fabric/build/reports/jacoco/test/html/index.html`.
+See PLAN.md "Phase 2 (test coverage)" for the full included/excluded-class
+table and rationale (in short: `GameInfoMath`/`SimpleUtilitiesConfig`/
+`Colors` are pure/headless-safe and 100% tested;
+`SimpleUtilities`/`GameInfoHud`/`HudHooks`/`PlatformCanvas`/`TextCompat`
+are loader-glue/rendering/version-fragile and excluded from the coverage
+bundle - see PLAN.md's "Cross-cell test-safety trap" note before assuming
+any class that imports a Minecraft package is headless-testable just
+because it passes on the active cell).
+
+**Important**: `src/test/java` is Stonecutter-generated per cell exactly
+like `src/main/java`, and `check`/`test` run identically on every cell -
+so any new test that references a Minecraft class must be verified
+against a full `./gradlew chiseledBuild`, not just the active cell,
+before being trusted as "headless-safe."
+
 ## Version matrix
 
 See PLAN.md for the full per-cell status table and rationale. Summary: 10

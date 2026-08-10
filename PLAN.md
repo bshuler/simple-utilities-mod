@@ -217,6 +217,117 @@ merged all-loader jar instead of ten per-cell ones.
       previous 8-classes-Fabric-only vs. 3-classes-stub gap is closed on
       every cell, no green-but-stub jars remain anywhere in the matrix.
 
+## Phase 2 (test coverage): JUnit 5 + JaCoCo
+
+Added a JUnit 5 + JaCoCo test suite to the active Stonecutter cell only
+(`1.21.4-fabric`, matching this repo's `vcsVersion` - tests are never run
+across the full matrix; switch cells only via
+`./gradlew "Set active project to <cell>"`, never by hand-editing
+`stonecutter.gradle.kts`). Wiring mirrors the canonical pattern already
+landed in `critical-orientation`/`FlightHud`: `jacoco` plugin,
+`testImplementation("org.junit.jupiter:junit-jupiter:5.10.2")`, a shared
+`jacocoExcludes` file-pattern list applied to both `jacocoTestReport` and
+`jacocoTestCoverageVerification`, a `LINE`/`COVEREDRATIO` minimum of
+`1.00`, and `check` `dependsOn` the verification task.
+
+### Result: 100% LINE coverage, enforced, `check` green
+
+`./gradlew ":1.21.4-fabric:check"` is BUILD SUCCESSFUL with the
+verification rule set to `1.00` (not a lowered bar). 38 tests, 0 failures,
+across 3 test classes. `--info` confirms JaCoCo actually analyzed a
+nonzero, correct class count (not a false-green empty-bundle run - the
+prior FlightHud program's GOTCHA (t)): `Writing bundle '1.21.4-fabric'
+with 3 classes`, matching the 3 classes below.
+
+### Included (fully tested, 100% line coverage)
+
+| Class | Why it's testable | Test file |
+|---|---|---|
+| `hud/GameInfoMath.java` (**new**) | Pure static math/formatting extracted from `GameInfoHud` - zero Minecraft imports, zero Stonecutter conditionals, identical on every cell. Mirrors FlightHud's `FlightComputerMath` extraction pattern. | `GameInfoMathTest.java` (27 tests) |
+| `config/SimpleUtilitiesConfig.java` | Already Minecraft-import-free by design (see its own class javadoc) - plain `Properties`-backed persistence. | `SimpleUtilitiesConfigTest.java` (9 tests) |
+| `helpers/Colors.java` | Plain `int` constants; the only coverable bytecode is the implicit default constructor (javac-synthesized, since the class isn't `final`/has no explicit ctor) - one trivial `new Colors()` test covers it. | `ColorsTest.java` (1 test) |
+
+`hud/SimpleCanvas.java` (pure interface, only abstract methods) needs no
+JaCoCo exclusion either - no coverable bytecode, same as FlightHud's
+analogous `FlightCanvas`.
+
+### Excluded (JaCoCo `jacocoExcludes`, documented per class)
+
+| Class | Why excluded |
+|---|---|
+| `SimpleUtilities.java` | Entry point; every branch (Fabric `ClientModInitializer`, NeoForge/Forge `@Mod` constructors) touches live loader/KeyMapping/GLFW singletons at construction time - genuinely unsafe/meaningless to instantiate headless. |
+| `hud/GameInfoHud.java` | Rendering/state class - draws via `SimpleCanvas`, reads live `LocalPlayer`/`ItemStack`/`Level` state. All its pure math/formatting was extracted into `GameInfoMath` (see above); what's left is Minecraft-state glue only. |
+| `hud/HudHooks.java` | Registers against each loader's official HUD-render hook (`HudRenderCallback`/`HudElementRegistry`/`RenderGuiEvent.Post`/`RegisterGuiOverlaysEvent`) - loader-glue, nothing to unit-test without a running client. |
+| `hud/PlatformCanvas.java` | The one version-conditional `SimpleCanvas` implementation; every branch calls a real `GuiGraphics`/`PoseStack`/`Font` drawing API - untestable headless. |
+| `util/TextCompat.java` | See "Cross-cell test-safety trap" below - initially thought testable (an active-cell-only spike passed), but proven unsafe once checked against the full matrix, not just the active cell. |
+
+### Cross-cell test-safety trap found while verifying (worth flagging for sibling mods)
+
+An earlier pass wrote `TextCompatTest.java` to cover `TextCompat`'s
+`Component`/`ResourceKey`-touching methods, reasoning that a passing spike
+test against the *active* cell (`1.21.4-fabric`) proved it "runs headless."
+That reasoning was **wrong**, caught only by the mandated end-of-work
+`chiseledBuild` regression: `src/test/java` is Stonecutter-generated
+per-cell exactly like `src/main/java` (evidenced by the generated paths
+under `versions/<cell>/build/generated/stonecutter/test/java/...`), and
+`build`/`check` are wired identically on every cell - so any test that
+merely *compiles* against the active cell's jar can still break 8 of the
+other 9 cells at either compile time or class-init time:
+
+- `net.minecraft.core.registries.Registries` /
+  `ResourceLocation.fromNamespaceAndPath(...)` don't exist pre-1.21 -
+  **compile** failures on 1.18.2/1.19.4-fabric.
+- Even after switching to the supposedly-stable, no-conditionals-needed
+  `Level.OVERWORLD`/`Level.NETHER` constants, the test still failed at
+  **runtime** (`ExceptionInInitializerError` /
+  `NoClassDefFoundError`/`IllegalStateException`/`IllegalArgumentException`)
+  on every cell *except* 1.21.4-fabric and 1.21.4-neoforge - `Level`'s
+  static initializer evidently depends on registry/bootstrap state that
+  differs release to release, and headless JUnit provides none of it.
+
+Net lesson: passing on the active cell is **not sufficient evidence**
+that a Minecraft-class-touching method is headless-safe across a
+multi-version matrix - only a real `chiseledBuild` run (or equivalent
+per-cell `test` run) can prove that, and until proven, treat *any* class
+that imports a Minecraft package as excluded rather than "probably fine."
+`TextCompat` was reverted to `jacocoExcludes`; the `Registries`-based spike
+test and its `TextCompatTest.java` successor were both deleted rather than
+left half-working. This is a stronger version of GOTCHA (t) worth carrying
+into sibling mod briefs: verify "does it run headless" against the *whole
+matrix*, not just the cell you happen to be iterating on.
+
+No watcher/poller background thread exists anywhere in this mod (checked:
+`grep -rn "Thread\|ScheduledExecutor\|Executors\|Runnable" src/main/java`
+returned nothing) - the FlightHud-derived "watcher thread try-with-resources
+coverage gap" gotcha does not apply here.
+
+### Bug found while writing tests
+
+`GameInfoMath.secondsToString(int)` (carried over unchanged from
+`GameInfoHud`'s old private method) is dead code - `grep -rn
+"secondsToString" src/main/java` shows it is never called anywhere in
+production. Not deleted (out of scope for a behavior-preserving refactor,
+and deletion wasn't requested), but flagged here and directly unit-tested
+since it's still reachable, harmless pure logic.
+
+### Forge/NeoForge test-infra gotchas (added proactively, not yet exercised)
+
+Since Phase 2 test tooling only ran against the active `1.21.4-fabric`
+cell, these two known upstream/Stonecraft gotchas (seen on sibling mods)
+were wired defensively but not empirically triggered here:
+- NeoForge's `junit-fml` module registers a `mainargs.txt`-expecting JUnit
+  Platform listener that breaks plain (non-gametest) unit tests - excluded
+  from `testRuntimeClasspath` via `if (mod.isNeoforge) { ... }` in
+  `build.gradle.kts`.
+- Forge's `generatePackMCMetaJson` task has an undeclared/implicit
+  dependency relationship with `compileTestJava` - declared explicitly via
+  `tasks.matching { it.name == "compileTestJava" }.configureEach {
+  dependsOn(tasks.matching { it.name == "generatePackMCMetaJson" }) }`.
+
+### Folia
+
+Folia n/a - client mod.
+
 ## Notes log (append as work proceeds; keep dated)
 
 - **2026-08-10**: Fixed four Yarn-API mismatches blocking the original
@@ -266,6 +377,26 @@ merged all-loader jar instead of ten per-cell ones.
   `GameInfoHud`, `HudHooks`, `PlatformCanvas`, `SimpleCanvas`,
   `TextCompat`) - the previous 8-vs-3 gap is fully closed, no stub cells
   remain.
+- **2026-08-10**: Phase 2 (test coverage). Extracted `hud/GameInfoMath.java`
+  (pure math/formatting) out of `GameInfoHud.java`; added JUnit 5 + JaCoCo
+  wiring to `build.gradle.kts` (mirroring `critical-orientation`/
+  `FlightHud`'s canonical pattern, `LINE`/`COVEREDRATIO` = `1.00`); wrote
+  `GameInfoMathTest`, `SimpleUtilitiesConfigTest`, `ColorsTest` (38 tests
+  total) against the active `1.21.4-fabric` cell. `./gradlew
+  ":1.21.4-fabric:check"` green at 100% line coverage across the 3
+  included classes; `GameInfoHud`/`HudHooks`/`PlatformCanvas`/
+  `SimpleUtilities`/`TextCompat` excluded and documented (rendering/
+  loader-glue/version-fragile, genuinely untestable headless) - see "Phase
+  2 (test coverage)" above for the full table. Initially attempted a
+  `TextCompatTest.java` on the theory that an active-cell-only spike
+  proved it headless-safe; the mandated `chiseledBuild` regression caught
+  that this was wrong (broke 8 of the other 9 cells at compile- or
+  runtime) - reverted, documented as a cross-cell test-safety trap. Found
+  (and left intact, documented) one piece of dead code: `secondsToString`
+  is unused in production. Folia n/a (client mod). NeoForge junit-fml and
+  Forge generatePackMCMetaJson/compileTestJava gotchas wired proactively
+  though not exercised (active cell is Fabric). Full 10-cell
+  `chiseledBuild` reconfirmed green after the revert.
 - **Open risk, not remediated this pass**: this machine's boot volume has
   been observed at ~98% used (roughly 11-13GB free) across this program's
   work on several sibling mods, and has previously caused Loom/toolchain

@@ -2,7 +2,6 @@ package net.johnvictorfs.simple_utilities.hud;
 
 import com.google.common.collect.Lists;
 import net.johnvictorfs.simple_utilities.config.SimpleUtilitiesConfig;
-import net.johnvictorfs.simple_utilities.helpers.Colors;
 import net.johnvictorfs.simple_utilities.util.TextCompat;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -125,19 +124,7 @@ public class GameInfoHud {
             int currentDurability = equippedItem.getMaxDamage() - equippedItem.getDamageValue();
             String itemDurability = currentDurability + "/" + equippedItem.getMaxDamage();
 
-            int color = config.textColor;
-            if (currentDurability < equippedItem.getMaxDamage()) {
-                color = Colors.lightGreen;
-            }
-            if (currentDurability <= (equippedItem.getMaxDamage() / 1.5)) {
-                color = Colors.lightYellow;
-            }
-            if (currentDurability <= (equippedItem.getMaxDamage() / 2.5)) {
-                color = Colors.lightOrange;
-            }
-            if (currentDurability <= (equippedItem.getMaxDamage()) / 4) {
-                color = Colors.lightRed;
-            }
+            int color = GameInfoMath.durabilityColor(currentDurability, equippedItem.getMaxDamage(), config.textColor);
 
             canvas.drawText(this.font, itemDurability, 22, itemTop - 64, color, true);
         } else {
@@ -145,7 +132,7 @@ public class GameInfoHud {
             int count = equippedItem.getCount();
 
             if (inventoryCount > 1) {
-                String itemCount = count + " (" + inventoryCount + ")";
+                String itemCount = GameInfoMath.formatItemCount(count, inventoryCount);
                 canvas.drawText(this.font, itemCount, 22, itemTop - 64, config.textColor, true);
             }
         }
@@ -205,57 +192,6 @@ public class GameInfoHud {
         return (int) (Math.ceil(maxLineHeight / 5.0D + 0.5D) * 5);
     }
 
-    private static String capitalize(String str) {
-        if (str == null) return null;
-        return str.substring(0, 1).toUpperCase() + str.substring(1);
-    }
-
-    private String getOffset(Direction facing) {
-        String offset = "";
-
-        if (facing.getStepX() > 0) {
-            offset += "+X";
-        } else if (facing.getStepX() < 0) {
-            offset += "-X";
-        }
-
-        if (facing.getStepZ() > 0) {
-            offset += " +Z";
-        } else if (facing.getStepZ() < 0) {
-            offset += " -Z";
-        }
-
-        return offset.trim();
-    }
-
-    private static String zeroPadding(int number) {
-        return (number >= 10) ? Integer.toString(number) : String.format("0%s", number);
-    }
-
-    private static String secondsToString(int pTime) {
-        final int min = pTime / 60;
-        final int sec = pTime - (min * 60);
-        return String.format("%s:%s", zeroPadding(min), zeroPadding(sec));
-    }
-
-    private static String parseTime(long time) {
-        long hours = (time / 1000 + 6) % 24;
-        long minutes = (time % 1000) * 60 / 1000;
-        String ampm = "AM";
-
-        if (hours >= 12) {
-            hours -= 12;
-            ampm = "PM";
-        }
-
-        if (hours == 0) hours = 12;
-
-        String mm = "0" + minutes;
-        mm = mm.substring(mm.length() - 2);
-
-        return hours + ":" + mm + " " + ampm;
-    }
-
     // 1.18.2 has no Minecraft.getFps() accessor (added 1.19.4 on, confirmed
     // via javap) - only the private static `fps` field. Reflection is the
     // only way to read it without a Mixin.
@@ -279,10 +215,10 @@ public class GameInfoHud {
             String coordDirectionStatus = "";
             Direction facing = this.player.getDirection();
             String translatedDirection = TextCompat.translatableString("text.direction.simple_utilities." + facing.getSerializedName());
-            String direction = translatedDirection + " " + getOffset(facing);
+            String direction = translatedDirection + " " + GameInfoMath.getOffset(facing.getStepX(), facing.getStepZ());
 
             if (config.toggleCoordinatesStatus) {
-                coordDirectionStatus += String.format("%d, %d, %d", (int) this.player.getX(), (int) this.player.getY(), (int) this.player.getZ());
+                coordDirectionStatus += GameInfoMath.formatCoordinates((int) this.player.getX(), (int) this.player.getY(), (int) this.player.getZ());
                 if (config.toggleDirectionStatus) {
                     coordDirectionStatus += " (" + direction + ")";
                 }
@@ -294,12 +230,11 @@ public class GameInfoHud {
         }
 
         if (config.toggleNetherCoordinateConversion && level != null) {
-            String coordsFormat = "X: %.0f, Z: %.0f";
             ResourceKey<Level> dimension = level.dimension();
             if (dimension.equals(Level.OVERWORLD)) {
-                gameInfo.add("Nether: " + String.format(coordsFormat, this.player.getX() / 8, this.player.getZ() / 8));
+                gameInfo.add("Nether: " + GameInfoMath.formatNetherFromOverworld(this.player.getX(), this.player.getZ()));
             } else if (dimension.equals(Level.NETHER)) {
-                gameInfo.add("Overworld: " + String.format(coordsFormat, this.player.getX() * 8, this.player.getZ() * 8));
+                gameInfo.add("Overworld: " + GameInfoMath.formatOverworldFromNether(this.player.getX(), this.player.getZ()));
             }
         }
 
@@ -315,8 +250,8 @@ public class GameInfoHud {
             Vec3 pos = this.player.position();
             double travelledX = pos.x - this.player.xo;
             double travelledZ = pos.z - this.player.zo;
-            double currentSpeed = Mth.sqrt((float) (travelledX * travelledX + travelledZ * travelledZ));
-            gameInfo.add(String.format("%.2f m/s", currentSpeed / 0.05F));
+            float currentSpeed = Mth.sqrt((float) (travelledX * travelledX + travelledZ * travelledZ));
+            gameInfo.add(GameInfoMath.formatSpeed(currentSpeed));
         }
 
         if (level != null) {
@@ -331,15 +266,15 @@ public class GameInfoHud {
                 if (biomeKey.isPresent()) {
                     String biomeName = TextCompat.translatableString(
                             "biome." + TextCompat.keyNamespace(biomeKey.get()) + "." + TextCompat.keyPath(biomeKey.get()));
-                    gameInfo.add(TextCompat.translatableString("text.hud.simple_utilities.biome", capitalize(biomeName)));
+                    gameInfo.add(TextCompat.translatableString("text.hud.simple_utilities.biome", GameInfoMath.capitalize(biomeName)));
                 }
             }
 
             if (config.toggleGameTimeStatus) {
                 //? if >=26.1 {
-                /*gameInfo.add(parseTime(level.getOverworldClockTime()));
+                /*gameInfo.add(GameInfoMath.parseTime(level.getOverworldClockTime()));
                 *///?} else {
-                gameInfo.add(parseTime(level.getDayTime()));
+                gameInfo.add(GameInfoMath.parseTime(level.getDayTime()));
                 //?}
             }
         }
