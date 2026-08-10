@@ -6,12 +6,15 @@ import net.johnvictorfs.simple_utilities.config.SimpleUtilitiesConfig;
 
 //? if fabric {
 import net.fabricmc.api.ClientModInitializer;
-import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.fabricmc.loader.api.FabricLoader;
+//? if >=26.1 {
+//?} else {
+/*import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
 import net.johnvictorfs.simple_utilities.util.TextCompat;
 import net.minecraft.client.option.KeyBinding;
 import org.lwjgl.glfw.GLFW;
+*///?}
 //?} elif neoforge {
 /*import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
@@ -25,13 +28,18 @@ import net.minecraftforge.fml.loading.FMLPaths;
 *///?}
 
 /**
- * Mod entry point. On Fabric this loads the vendored config, registers the
- * "toggle HUD" keybinding, and wires the on/off chat message. NeoForge and
- * Forge builds currently only load config on client setup - the HUD-overlay
- * mixin (Yarn-mapped internals) has not been ported to Mojang-mapped
- * targets yet, see PLAN.md. This mirrors the exact pattern
- * EasierVillagerTrading uses for its own Fabric-first, Forge/NeoForge-stub
- * split.
+ * Mod entry point. On Fabric (below 26.1) this loads the vendored config,
+ * registers the "toggle HUD" keybinding, and wires the on/off chat message.
+ * NeoForge and Forge builds currently only load config on client setup - the
+ * HUD-overlay mixin (Yarn-mapped internals) has not been ported to
+ * Mojang-mapped targets yet, see PLAN.md. Fabric 26.1+ is scoped the same
+ * way: Mojang stopped publishing Yarn mappings there too, so this mod's
+ * Yarn-mapped HUD/keybinding code (GameInfoHud, GameInfoMixin,
+ * GameClientMixin, TextCompat) is excluded and Fabric falls back to the
+ * same config-only stub as NeoForge/Forge, pending a future port using
+ * FlightHud's HudHooks/PlatformCanvas pattern - see PLAN.md "26.2". This
+ * mirrors the exact pattern EasierVillagerTrading uses for its own
+ * Fabric-first, Forge/NeoForge-stub split.
  */
 //? if neoforge {
 /*@Mod(SimpleUtilities.MODID)
@@ -52,10 +60,15 @@ implements ClientModInitializer
         File configDir = FabricLoader.getInstance().getConfigDir().toFile();
         SimpleUtilitiesConfig.getInstance(configDir);
 
-        registerKeybinding(configDir);
+        //? if >=26.1 {
+        //?} else {
+        /*registerKeybinding(configDir);
+        *///?}
     }
 
-    private void registerKeybinding(File configDir) {
+    //? if >=26.1 {
+    //?} else {
+    /*private void registerKeybinding(File configDir) {
         KeyBinding toggleHudKey = new KeyBinding(
                 "key.simple_utilities.toggle_hud",
                 GLFW.GLFW_KEY_K,
@@ -80,6 +93,7 @@ implements ClientModInitializer
             }
         });
     }
+    *///?}
     //?} elif neoforge {
     /*public SimpleUtilities(IEventBus modEventBus) {
         modEventBus.addListener(this::onClientSetup);

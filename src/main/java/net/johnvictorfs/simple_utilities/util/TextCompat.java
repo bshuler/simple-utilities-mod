@@ -1,6 +1,6 @@
 package net.johnvictorfs.simple_utilities.util;
 
-//? if fabric {
+//? if fabric && <26.1 {
 import net.minecraft.text.Text;
 //? if >=1.19 {
 //?} else {
@@ -16,12 +16,13 @@ import net.minecraft.text.Text;
  * means {@code GameInfoHud}/{@code SimpleUtilities} don't need their own
  * per-version branches for every translation call.
  *
- * <p>Fabric-only: Forge/NeoForge cells in this pass don't wire in the
+ * <p>Fabric-only (and only below 26.1): Forge/NeoForge cells, and Fabric
+ * 26.1+ (which stopped publishing Yarn mappings), don't wire in the
  * HUD-rendering feature at all (see PLAN.md), so this class is guarded to
- * compile to an empty (package-only) file on those loaders, matching the
+ * compile to an empty (package-only) file on those targets, matching the
  * house pattern used by EasierVillagerTrading's mixin classes.
  */
-//? if fabric {
+//? if fabric && <26.1 {
 public final class TextCompat {
     private TextCompat() {
     }

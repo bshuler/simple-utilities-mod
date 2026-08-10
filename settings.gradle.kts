@@ -35,16 +35,23 @@ stonecutter {
         // split). Quilt is not a separate cell - it runs Fabric jars natively.
 
         // Newest stable Minecraft per https://meta.fabricmc.net/v2/versions/game
-        // (checked live - do not trust training-data memory) is 26.2. It is
-        // EXCLUDED from this pass: 26.1+ rewrote the client GUI rendering
-        // pipeline (GuiGraphics/DrawContext replaced by a GuiRenderState-based
-        // state-extraction model) and changed KeyMapping's constructor to take
-        // a KeyMapping.Category - both touch this mod's core HUD-drawing and
-        // keybinding code directly, not just the toolchain. Per the documented
-        // fallback for this exact situation, 1.21.4 is the matrix top instead.
-        // See PLAN.md "26.2" section for the full blocker writeup.
+        // (checked live - do not trust training-data memory) is 26.2. 26.1+
+        // rewrote the client GUI rendering pipeline (GuiGraphics/DrawContext
+        // replaced by a GuiRenderState-based state-extraction model) and
+        // stopped publishing Yarn mappings entirely (Mojang-official names
+        // only from here on). The sibling FlightHud mod proved the fix for
+        // this exact situation: don't reverse-engineer GuiRenderState, hook
+        // each loader's own official HUD-render event/registry instead
+        // (Fabric HudElementRegistry/HudRenderCallback, NeoForge
+        // RenderGuiEvent.Post). This mod's own HUD-render code (GameInfoHud/
+        // GameInfoMixin) has NOT been ported to that pattern yet - it's
+        // Yarn-mapped and Mixin-based, so it's scoped out of 26.2-fabric for
+        // now the same way it's already scoped out of Forge/NeoForge (config
+        // load only). See PLAN.md "26.2" section for the follow-up port plan.
 
-        // 1.21.4 - Fabric + NeoForge (newest target in this pass; last classic-numbered Yarn-mapped version)
+        // 26.2 - Fabric + NeoForge (newest stable; HUD render deferred, see above)
+        mc("26.2", "fabric", "neoforge")
+        // 1.21.4 - Fabric + NeoForge (last classic-numbered Yarn-mapped version)
         mc("1.21.4", "fabric", "neoforge")
         // 1.20.1 - Fabric + Forge (last major Forge version before NeoForge split)
         mc("1.20.1", "fabric", "forge")

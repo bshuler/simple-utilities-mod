@@ -1,13 +1,17 @@
 package net.johnvictorfs.simple_utilities.hud;
 
-// This whole file is Fabric-only for now: it draws directly onto the vanilla
-// HUD using Yarn-mapped rendering APIs (DrawContext/MatrixStack, TextRenderer,
-// ItemRenderer) that Forge/NeoForge would need re-derived against Mojang
-// mappings. Forge/NeoForge cells only load config this pass - see PLAN.md and
-// CLAUDE.md "Why mixins/HUD rendering make Forge/NeoForge harder than the
-// template", the same split EasierVillagerTrading documents for its own
-// mixin-based feature.
-//? if fabric {
+// This whole file is Fabric-only (and only below 26.1) for now: it draws
+// directly onto the vanilla HUD using Yarn-mapped rendering APIs
+// (DrawContext/MatrixStack, TextRenderer, ItemRenderer) that Forge/NeoForge
+// would need re-derived against Mojang mappings, and that don't exist at all
+// on Fabric 26.1+ (Yarn mappings stopped being published there). Forge/
+// NeoForge cells, and the 26.2-fabric cell, only load config this pass - see
+// PLAN.md and CLAUDE.md "Why mixins/HUD rendering make Forge/NeoForge harder
+// than the template", the same split EasierVillagerTrading documents for its
+// own mixin-based feature. PLAN.md "26.2" documents the follow-up plan to
+// port this feature using FlightHud's HudHooks/PlatformCanvas pattern
+// (loader-official HUD hooks instead of a GuiRenderState mixin).
+//? if fabric && <26.1 {
 import com.google.common.collect.Lists;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.fabricmc.api.EnvType;

@@ -2,8 +2,10 @@ package net.johnvictorfs.simple_utilities.mixin;
 
 // Fabric-only, Yarn-mapped mixin target (InGameHud) - see GameInfoHud's class
 // javadoc. Render-method parameter type is version-split: DrawContext
-// (>=1.20) vs MatrixStack (1.18.2/1.19.4, pre-DrawContext).
-//? if fabric {
+// (>=1.20) vs MatrixStack (1.18.2/1.19.4, pre-DrawContext). Excluded on
+// Fabric 26.1+ too, since Yarn mappings (and InGameHud/DrawContext
+// themselves) don't exist there - see PLAN.md "26.2".
+//? if fabric && <26.1 {
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.johnvictorfs.simple_utilities.hud.GameInfoHud;
