@@ -1,0 +1,26 @@
+modLoader = "javafml"
+loaderVersion = "*"
+license = "MIT"
+issueTrackerURL = "https://github.com/bshuler/simple-utilities-mod/issues"
+
+[[mods]]
+modId = "${id}"
+version = "${version}"
+displayName = "${name}"
+description = '''${description}'''
+authors = "johnvictorfs, Bert Shuler"
+displayURL = "https://github.com/bshuler/simple-utilities-mod"
+
+[[dependencies.${id}]]
+modId = "forge"
+mandatory = true
+versionRange = "*"
+ordering = "NONE"
+side = "CLIENT"
+
+[[dependencies.${id}]]
+modId = "minecraft"
+mandatory = true
+versionRange = "[${minecraftVersion},)"
+ordering = "NONE"
+side = "CLIENT"

@@ -1,108 +1,241 @@
 package net.johnvictorfs.simple_utilities.hud;
 
-import com.mojang.blaze3d.systems.RenderSystem;
-import me.shedaniel.autoconfig.AutoConfig;
-import net.johnvictorfs.simple_utilities.config.SimpleUtilitiesConfig;
-import net.johnvictorfs.simple_utilities.helpers.Colors;
+// This whole file is Fabric-only for now: it draws directly onto the vanilla
+// HUD using Yarn-mapped rendering APIs (DrawContext/MatrixStack, TextRenderer,
+// ItemRenderer) that Forge/NeoForge would need re-derived against Mojang
+// mappings. Forge/NeoForge cells only load config this pass - see PLAN.md and
+// CLAUDE.md "Why mixins/HUD rendering make Forge/NeoForge harder than the
+// template", the same split EasierVillagerTrading documents for its own
+// mixin-based feature.
+//? if fabric {
 import com.google.common.collect.Lists;
+import com.mojang.blaze3d.systems.RenderSystem;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
+import net.fabricmc.loader.api.FabricLoader;
+import net.johnvictorfs.simple_utilities.config.SimpleUtilitiesConfig;
+import net.johnvictorfs.simple_utilities.helpers.Colors;
 import net.johnvictorfs.simple_utilities.mixin.GameClientMixin;
+import net.johnvictorfs.simple_utilities.util.TextCompat;
 import net.minecraft.block.Blocks;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.ChatScreen;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.resource.language.I18n;
-import net.minecraft.entity.effect.StatusEffect;
-import net.minecraft.entity.effect.StatusEffectInstance;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.ItemStack;
 import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.entry.RegistryEntry;
-import net.minecraft.text.Text;
-import net.minecraft.util.ActionResult;
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.biome.Biome;
+//? if >=1.20 {
+import net.minecraft.client.gui.DrawContext;
+//?} else {
+/*import net.minecraft.client.util.math.MatrixStack;
+*///?}
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
 
+/**
+ * Draws the HUD overlay: coordinates/direction, fps, biome, game time,
+ * equipment + durability, sprint indicator. Direct port of upstream's
+ * {@code GameInfoHud} (johnvictorfs/simple-utilities-mod 2.6.2), with Cloth
+ * Config swapped for the vendored {@link SimpleUtilitiesConfig} and
+ * rendering split by MC version - {@code DrawContext} (>=1.20) vs
+ * {@code MatrixStack} (1.18.2/1.19.4, pre-DrawContext).
+ *
+ * <p>1.18.2/1.19.4 equipment info is text-only (item name + durability/count,
+ * no item-slot icon) - the old {@code ItemRenderer} icon-drawing signature
+ * hasn't been re-verified against those two versions' Yarn mappings; tracked
+ * as open work in PLAN.md rather than guessed at.
+ */
 @Environment(EnvType.CLIENT)
 public class GameInfoHud {
     private final MinecraftClient client;
     private final TextRenderer fontRenderer;
     private ClientPlayerEntity player;
-    private DrawContext context;
-    private SimpleUtilitiesConfig config;
+    private final SimpleUtilitiesConfig config;
 
     public GameInfoHud(MinecraftClient client) {
         this.client = client;
         this.fontRenderer = client.textRenderer;
-
-        this.config = AutoConfig.getConfigHolder(SimpleUtilitiesConfig.class).getConfig();
-
-        AutoConfig.getConfigHolder(SimpleUtilitiesConfig.class).registerSaveListener((manager, data) -> {
-            // Update local config when new settings are saved
-            this.config = data;
-            return ActionResult.SUCCESS;
-        });
+        this.config = SimpleUtilitiesConfig.getInstance(FabricLoader.getInstance().getConfigDir().toFile());
     }
 
+    //? if >=1.20 {
     public void draw(DrawContext context) {
-        if (!config.statusElements.toggleSimpleUtilitiesHUD) return;
-
+        if (!config.toggleSimpleUtilitiesHUD) return;
         this.player = this.client.player;
-
-        this.context = context;
+        if (this.player == null) return;
 
         RenderSystem.enableBlend();
 
-        this.drawInfos();
-
-        this.client.getProfiler().pop();
-    }
-
-    private void drawInfos() {
-        // Draw lines of Array of Game info in the screen
-        List<String> gameInfo = getGameInfo();
-//        create minecraft text from string
-//        Text text = Text.of(String.join("\n", gameInfo));
-
-        if (config.statusElements.toggleEquipmentStatus && !(this.client.currentScreen instanceof ChatScreen)) {
-            drawEquipmentInfo();
+        if (config.toggleEquipmentStatus) {
+            drawEquipmentInfo(context);
         }
 
         int lineHeight = this.fontRenderer.fontHeight + 2;
         int top = 0;
         int left = 4;
 
-        for (String line : gameInfo) {
-            this.context.drawTextWithShadow(this.fontRenderer, line, left, top + 4, config.statusElements.textColor);
+        for (String line : getGameInfo()) {
+            context.drawTextWithShadow(this.fontRenderer, line, left, top + 4, config.textColor);
             top += lineHeight;
         }
 
-        if (config.statusElements.toggleSprintStatus && (this.client.options.sprintKey.isPressed() || this.player.isSprinting())) {
-            this.drawSprintingInfo();
+        if (config.toggleSprintStatus && (this.client.options.sprintKey.isPressed() || this.player.isSprinting())) {
+            drawSprintingInfo(context);
         }
     }
 
-    private void drawSprintingInfo() {
-        final String sprintingText = (Text.translatable("text.hud.simple_utilities.sprinting")).getString();
+    private void drawSprintingInfo(DrawContext context) {
+        final String sprintingText = TextCompat.translatableString("text.hud.simple_utilities.sprinting");
 
         int maxLineHeight = Math.max(10, this.fontRenderer.getWidth(sprintingText));
         maxLineHeight = (int) (Math.ceil(maxLineHeight / 5.0D + 0.5D) * 5);
         int scaleHeight = this.client.getWindow().getScaledHeight();
         int sprintingTop = scaleHeight - maxLineHeight;
 
-        // Sprinting Info
-        this.context.drawTextWithShadow(this.fontRenderer, sprintingText, 2, sprintingTop + 20, config.statusElements.textColor);
+        context.drawTextWithShadow(this.fontRenderer, sprintingText, 2, sprintingTop + 20, config.textColor);
+    }
+
+    private void drawEquipmentInfo(DrawContext context) {
+        List<ItemStack> equippedItems = collectEquippedItems();
+        int maxLineHeight = maxEquipmentLineHeight(equippedItems);
+        int itemTop = this.client.getWindow().getScaledHeight() - maxLineHeight;
+        int lineHeight = this.fontRenderer.fontHeight + 6;
+
+        for (ItemStack equippedItem : Lists.reverse(equippedItems)) {
+            if (equippedItem.getItem().equals(Blocks.AIR.asItem())) continue;
+
+            context.drawItem(equippedItem, 2, itemTop - 68);
+            drawEquipmentLine(equippedItem, itemTop, (text, x, y, color) ->
+                    context.drawTextWithShadow(this.fontRenderer, text, x, y, color));
+
+            itemTop += lineHeight;
+        }
+    }
+    //?} else {
+    /*public void draw(MatrixStack matrices) {
+        if (!config.toggleSimpleUtilitiesHUD) return;
+        this.player = this.client.player;
+        if (this.player == null) return;
+
+        RenderSystem.enableBlend();
+
+        if (config.toggleEquipmentStatus) {
+            drawEquipmentInfo(matrices);
+        }
+
+        int lineHeight = this.fontRenderer.fontHeight + 2;
+        int top = 0;
+        int left = 4;
+
+        for (String line : getGameInfo()) {
+            this.fontRenderer.drawWithShadow(matrices, line, left, top + 4, config.textColor);
+            top += lineHeight;
+        }
+
+        if (config.toggleSprintStatus && (this.client.options.sprintKey.isPressed() || this.player.isSprinting())) {
+            drawSprintingInfo(matrices);
+        }
+    }
+
+    private void drawSprintingInfo(MatrixStack matrices) {
+        final String sprintingText = TextCompat.translatableString("text.hud.simple_utilities.sprinting");
+
+        int maxLineHeight = Math.max(10, this.fontRenderer.getWidth(sprintingText));
+        maxLineHeight = (int) (Math.ceil(maxLineHeight / 5.0D + 0.5D) * 5);
+        int scaleHeight = this.client.getWindow().getScaledHeight();
+        int sprintingTop = scaleHeight - maxLineHeight;
+
+        this.fontRenderer.drawWithShadow(matrices, sprintingText, 2, sprintingTop + 20, config.textColor);
+    }
+
+    // Text-only equipment info on 1.18.2/1.19.4 - no item-slot icon, see class
+    // javadoc. Still shows name + durability/count, just not the icon.
+    private void drawEquipmentInfo(MatrixStack matrices) {
+        List<ItemStack> equippedItems = collectEquippedItems();
+        int lineHeight = this.fontRenderer.fontHeight + 6;
+        int itemTop = this.client.getWindow().getScaledHeight() - maxEquipmentLineHeight(equippedItems);
+
+        for (ItemStack equippedItem : Lists.reverse(equippedItems)) {
+            if (equippedItem.getItem().equals(Blocks.AIR.asItem())) continue;
+
+            String name = I18n.translate(equippedItem.getItem().getTranslationKey());
+            this.fontRenderer.drawWithShadow(matrices, name, 2, itemTop - 68, config.textColor);
+            drawEquipmentLine(equippedItem, itemTop, (text, x, y, color) ->
+                    this.fontRenderer.drawWithShadow(matrices, text, x, y, color));
+
+            itemTop += lineHeight;
+        }
+    }
+    *///?}
+
+    @FunctionalInterface
+    private interface LineDrawer {
+        void draw(String text, int x, int y, int color);
+    }
+
+    private void drawEquipmentLine(ItemStack equippedItem, int itemTop, LineDrawer drawer) {
+        if (equippedItem.getMaxDamage() != 0) {
+            int currentDurability = equippedItem.getMaxDamage() - equippedItem.getDamage();
+            String itemDurability = currentDurability + "/" + equippedItem.getMaxDamage();
+
+            int color = config.textColor;
+            if (currentDurability < equippedItem.getMaxDamage()) {
+                color = Colors.lightGreen;
+            }
+            if (currentDurability <= (equippedItem.getMaxDamage() / 1.5)) {
+                color = Colors.lightYellow;
+            }
+            if (currentDurability <= (equippedItem.getMaxDamage() / 2.5)) {
+                color = Colors.lightOrange;
+            }
+            if (currentDurability <= (equippedItem.getMaxDamage()) / 4) {
+                color = Colors.lightRed;
+            }
+
+            drawer.draw(itemDurability, 22, itemTop - 64, color);
+        } else {
+            PlayerInventory inventory = this.player.getInventory();
+            int inventoryCount = inventory.count(equippedItem.getItem());
+            int count = equippedItem.getCount();
+
+            if (inventoryCount > 1) {
+                String itemCount = count + " (" + inventoryCount + ")";
+                drawer.draw(itemCount, 22, itemTop - 64, config.textColor);
+            }
+        }
+    }
+
+    private List<ItemStack> collectEquippedItems() {
+        List<ItemStack> equippedItems = new ArrayList<>();
+        PlayerInventory inventory = this.player.getInventory();
+
+        equippedItems.add(inventory.getMainHandStack());
+        for (ItemStack secondHandItem : inventory.offHand) {
+            equippedItems.add(secondHandItem);
+        }
+        for (ItemStack armourItem : inventory.armor) {
+            equippedItems.add(armourItem);
+        }
+        return equippedItems;
+    }
+
+    private int maxEquipmentLineHeight(List<ItemStack> equippedItems) {
+        int maxLineHeight = Math.max(10, this.fontRenderer.getWidth(""));
+        for (ItemStack item : equippedItems) {
+            maxLineHeight = Math.max(maxLineHeight, this.fontRenderer.getWidth(I18n.translate(item.getItem().getTranslationKey())));
+        }
+        return (int) (Math.ceil(maxLineHeight / 5.0D + 0.5D) * 5);
     }
 
     private static String capitalize(String str) {
-        // Capitalize first letter of a String
         if (str == null) return null;
         return str.substring(0, 1).toUpperCase() + str.substring(1);
     }
@@ -125,104 +258,14 @@ public class GameInfoHud {
         return offset.trim();
     }
 
-    private String zeroPadding(int number) {
+    private static String zeroPadding(int number) {
         return (number >= 10) ? Integer.toString(number) : String.format("0%s", number);
     }
 
-    private String secondsToString(int pTime) {
+    private static String secondsToString(int pTime) {
         final int min = pTime / 60;
         final int sec = pTime - (min * 60);
-
-        final String strMin = zeroPadding(min);
-        final String strSec = zeroPadding(sec);
-        return String.format("%s:%s", strMin, strSec);
-    }
-
-    private void drawStatusEffectInfo() {
-        if (this.client.player != null) {
-            Map<RegistryEntry<StatusEffect>, StatusEffectInstance> effects = this.client.player.getActiveStatusEffects();
-
-            for (Map.Entry<RegistryEntry<StatusEffect>, StatusEffectInstance> effect : effects.entrySet()) {
-                String effectName = I18n.translate(effect.getValue().getEffectType().value().getTranslationKey());
-
-                String duration = secondsToString(effect.getValue().getDuration() / 20);
-
-                int color = effect.getValue().getEffectType().value().getColor();
-
-                this.context.drawTextWithShadow(this.fontRenderer, effectName + " " + duration, 40, 200, color);
-            }
-        }
-    }
-
-    private void drawEquipmentInfo() {
-        List<ItemStack> equippedItems = new ArrayList<>();
-        PlayerInventory inventory = this.player.getInventory();
-        int maxLineHeight = Math.max(10, this.fontRenderer.getWidth(""));
-
-        ItemStack mainHandItem = inventory.getMainHandStack();
-        maxLineHeight = Math.max(maxLineHeight, this.fontRenderer.getWidth(I18n.translate(mainHandItem.getTranslationKey())));
-        equippedItems.add(mainHandItem);
-
-        for (ItemStack secondHandItem : inventory.offHand) {
-            maxLineHeight = Math.max(maxLineHeight, this.fontRenderer.getWidth(I18n.translate(secondHandItem.getTranslationKey())));
-            equippedItems.add(secondHandItem);
-        }
-
-        for (ItemStack armourItem : this.player.getInventory().armor) {
-            maxLineHeight = Math.max(maxLineHeight, this.fontRenderer.getWidth(I18n.translate(armourItem.getTranslationKey())));
-            equippedItems.add(armourItem);
-        }
-
-        maxLineHeight = (int) (Math.ceil(maxLineHeight / 5.0D + 0.5D) * 5);
-        int itemTop = this.client.getWindow().getScaledHeight() - maxLineHeight;
-
-        int lineHeight = this.fontRenderer.fontHeight + 6;
-
-        // Draw in order Helmet -> Chestplate -> Leggings -> Boots
-        for (ItemStack equippedItem : Lists.reverse(equippedItems)) {
-            if (equippedItem.getItem().equals(Blocks.AIR.asItem())) {
-                // Skip empty slots
-                continue;
-            }
-
-            this.context.drawItem(equippedItem, 2, itemTop - 68); // TODO Check
-
-            if (equippedItem.getMaxDamage() != 0) {
-                int currentDurability = equippedItem.getMaxDamage() - equippedItem.getDamage();
-
-                String itemDurability = currentDurability + "/" + equippedItem.getMaxDamage();
-
-                // Default Durability Color
-                int color = config.statusElements.textColor;
-
-                if (currentDurability < equippedItem.getMaxDamage()) {
-                    // Start as Green if item has lost at least 1 durability
-                    color = Colors.lightGreen;
-                }
-                if (currentDurability <= (equippedItem.getMaxDamage() / 1.5)) {
-                    color = Colors.lightYellow;
-                }
-                if (currentDurability <= (equippedItem.getMaxDamage() / 2.5)) {
-                    color = Colors.lightOrange;
-                }
-                if (currentDurability <= (equippedItem.getMaxDamage()) / 4) {
-                    color = Colors.lightRed;
-                }
-
-                this.context.drawTextWithShadow(this.fontRenderer, itemDurability, 22, itemTop - 64, color);
-
-            } else {
-                int inventoryCount = inventory.count(equippedItem.getItem());
-                int count = equippedItem.getCount();
-
-                if (inventoryCount > 1) {
-                    String itemCount = count + " (" + inventoryCount + ")";
-                    this.context.drawTextWithShadow(this.fontRenderer, itemCount, 22, itemTop - 64, config.statusElements.textColor);
-                }
-            }
-
-            itemTop += lineHeight;
-        }
+        return String.format("%s:%s", zeroPadding(min), zeroPadding(sec));
     }
 
     private static String parseTime(long time) {
@@ -246,98 +289,85 @@ public class GameInfoHud {
     private List<String> getGameInfo() {
         List<String> gameInfo = new ArrayList<>();
 
-        if (config.statusElements.toggleCoordinatesStatus || config.statusElements.toggleDirectionStatus) {
+        if (config.toggleCoordinatesStatus || config.toggleDirectionStatus) {
             String coordDirectionStatus = "";
             Direction facing = this.player.getHorizontalFacing();
-            String translatedDirection = Text.translatable("text.direction.simple_utilities." + facing.asString()).getString();
+            String translatedDirection = TextCompat.translatableString("text.direction.simple_utilities." + facing.asString());
             String direction = translatedDirection + " " + getOffset(facing);
 
-            if (config.statusElements.toggleCoordinatesStatus) {
-                String coordsFormat = "%d, %d, %d";
-                coordDirectionStatus += String.format(coordsFormat, (int) this.player.getX(), (int) this.player.getY(), (int) this.player.getZ());
-
-                if (config.statusElements.toggleDirectionStatus) {
+            if (config.toggleCoordinatesStatus) {
+                coordDirectionStatus += String.format("%d, %d, %d", (int) this.player.getX(), (int) this.player.getY(), (int) this.player.getZ());
+                if (config.toggleDirectionStatus) {
                     coordDirectionStatus += " (" + direction + ")";
                 }
-            } else if (config.statusElements.toggleDirectionStatus) {
+            } else {
                 coordDirectionStatus += direction;
             }
 
             gameInfo.add(coordDirectionStatus);
         }
 
-        if (config.statusElements.toggleNetherCoordinateConversion) {
+        if (config.toggleNetherCoordinateConversion) {
             String coordsFormat = "X: %.0f, Z: %.0f";
-            if (this.player.getWorld().getRegistryKey().getValue().toString().equals("minecraft:overworld")) {
+            String dimension = this.player.getWorld().getRegistryKey().getValue().toString();
+            if (dimension.equals("minecraft:overworld")) {
                 gameInfo.add("Nether: " + String.format(coordsFormat, this.player.getX() / 8, this.player.getZ() / 8));
-            } else if (this.player.getWorld().getRegistryKey().getValue().toString().equals("minecraft:the_nether")) {
+            } else if (dimension.equals("minecraft:the_nether")) {
                 gameInfo.add("Overworld: " + String.format(coordsFormat, this.player.getX() * 8, this.player.getZ() * 8));
             }
         }
 
-        if (config.statusElements.toggleFpsStatus) {
-            // Get everything from fps debug string until the 's' from 'fps'
-            // gameInfo.add(client.fpsDebugString.substring(0, client.fpsDebugString.indexOf("s") + 1));
+        if (config.toggleFpsStatus) {
             gameInfo.add(String.format("%d fps", ((GameClientMixin) MinecraftClient.getInstance()).getCurrentFps()));
         }
 
-        // Player Speed
-        if (config.statusElements.togglePlayerSpeedStatus) {
-            // Calculating Speed
+        if (config.togglePlayerSpeedStatus) {
             Vec3d playerPosVec = Objects.requireNonNull(client.player).getPos();
             double travelledX = playerPosVec.x - client.player.prevX;
             double travelledZ = playerPosVec.z - client.player.prevZ;
-            double currentSpeed = MathHelper.sqrt((float)(travelledX * travelledX + travelledZ * travelledZ));
-            //double currentVertSpeed = playerPosVec.y - client.player.prevY;
+            double currentSpeed = MathHelper.sqrt((float) (travelledX * travelledX + travelledZ * travelledZ));
             gameInfo.add(String.format("%.2f m/s", currentSpeed / 0.05F));
         }
 
-        // Get translated biome info
         if (client.world != null) {
-
-            // Light Level
-            if (config.statusElements.toggleLightLevelStatus) {
+            if (config.toggleLightLevelStatus) {
                 int lightLevel = client.world.getLightLevel(Objects.requireNonNull(client.player).getBlockPos());
                 gameInfo.add("Light Level: " + lightLevel);
             }
 
-            if (config.statusElements.toggleBiomeStatus) {
+            if (config.toggleBiomeStatus) {
                 Optional<RegistryKey<Biome>> biome = this.client.world.getBiome(player.getBlockPos()).getKey();
-
                 if (biome.isPresent()) {
-                    String biomeName = Text.translatable("biome." + biome.get().getValue().getNamespace() + "." + biome.get().getValue().getPath()).getString();
-                    gameInfo.add(Text.translatable("text.hud.simple_utilities.biome", capitalize(biomeName)).getString());
+                    String biomeName = TextCompat.translatableString("biome." + biome.get().getValue().getNamespace() + "." + biome.get().getValue().getPath());
+                    gameInfo.add(TextCompat.translatableString("text.hud.simple_utilities.biome", capitalize(biomeName)));
                 }
             }
 
-            if (config.statusElements.toggleGameTimeStatus) {
-                // Add current parsed time
+            if (config.toggleGameTimeStatus) {
                 gameInfo.add(parseTime(client.world.getTimeOfDay()));
             }
         }
 
-        // 追加分
-
-        if (config.statusElements.togglePlayerName) {
+        if (config.togglePlayerName) {
             gameInfo.add(player.getName().getString());
         }
 
-        if (config.statusElements.toggleServerName) {
+        if (config.toggleServerName) {
             String serverName = "Singleplayer";
             try {
                 serverName = client.getCurrentServerEntry().name;
-            } catch (Exception e) {
-
+            } catch (Exception ignored) {
+                // no server entry (singleplayer) - keep default
             }
             gameInfo.add(serverName);
         }
 
-        if (config.statusElements.toggleServerAddress) {
+        if (config.toggleServerAddress) {
             String serverIp = "N/A";
             try {
                 serverIp = client.getCurrentServerEntry().address;
-            } catch (Exception e) {
-
+            } catch (Exception ignored) {
+                // no server entry (singleplayer) - keep default
             }
             gameInfo.add(serverIp);
         }
@@ -345,3 +375,4 @@ public class GameInfoHud {
         return gameInfo;
     }
 }
+//?}

@@ -1,25 +1,54 @@
-# gradle
-
+# Gradle
 .gradle/
 build/
 out/
 classes/
 
-# idea
+# Stonecutter-generated per-version subprojects (preprocessed copies of
+# src/, regenerated from it - never hand-edit, never commit). The
+# versions/dependencies/*.properties files are hand-maintained loader/mapping
+# version pins, NOT generated, and are tracked. Same for any per-cell
+# gradle.properties override (e.g. versions/1.21.4-fabric/gradle.properties) -
+# these are hand-maintained too, not Stonecutter output; only their sibling
+# build/ dirs are generated.
+versions/*
+!versions/dependencies
+!versions/*/
+.stonecutter-cache/
 
+# IntelliJ IDEA
 .idea/
 *.iml
 *.ipr
 *.iws
 
-# vscode
-
+# Eclipse
 .settings/
-.vscode/
 bin/
 .classpath
 .project
 
-# fabric
-remappedSrc/
+# NetBeans
+.nb-gradle/
+
+# VS Code
+.vscode/
+
+# Fabric / Minecraft
 run/
+logs/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local environment
+.env
+.env.local
+*.local
+
+# Loom
+remappedSrc/
+*-refmap.json

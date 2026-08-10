@@ -1,12 +1,19 @@
 package net.johnvictorfs.simple_utilities.mixin;
 
+// Fabric-only, Yarn-mapped mixin target (InGameHud) - see GameInfoHud's class
+// javadoc. Render-method parameter type is version-split: DrawContext
+// (>=1.20) vs MatrixStack (1.18.2/1.19.4, pre-DrawContext).
+//? if fabric {
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 import net.johnvictorfs.simple_utilities.hud.GameInfoHud;
 import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.hud.InGameHud;
-import net.minecraft.client.render.item.ItemRenderer;
+//? if >=1.20 {
+import net.minecraft.client.gui.DrawContext;
+//?} else {
+/*import net.minecraft.client.util.math.MatrixStack;
+*///?}
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -25,16 +32,23 @@ public abstract class GameInfoMixin {
 
     @Inject(method = "<init>(Lnet/minecraft/client/MinecraftClient;)V", at = @At(value = "RETURN"))
     private void onInit(MinecraftClient client, CallbackInfo ci) {
-        // Start Mixin
-        System.out.println("Init Coordinates Mixin");
         this.hudInfo = new GameInfoHud(client);
     }
 
+    //? if >=1.20 {
     @Inject(method = "render", at = @At("HEAD"))
-    private void onDraw(DrawContext context, float esp, CallbackInfo ci) {
+    private void onDraw(DrawContext context, float tickDelta, CallbackInfo ci) {
         if (!this.client.inGameHud.getDebugHud().shouldShowDebugHud()) {
-            // Draw Game info on every GameHud render
             this.hudInfo.draw(context);
         }
     }
+    //?} else {
+    /*@Inject(method = "render", at = @At("HEAD"))
+    private void onDraw(MatrixStack matrices, float tickDelta, CallbackInfo ci) {
+        if (!this.client.inGameHud.getDebugHud().shouldShowDebugHud()) {
+            this.hudInfo.draw(matrices);
+        }
+    }
+    *///?}
 }
+//?}

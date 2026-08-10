@@ -1,34 +1,56 @@
 package net.johnvictorfs.simple_utilities;
 
-import me.shedaniel.autoconfig.AutoConfig;
-import me.shedaniel.autoconfig.ConfigHolder;
-import me.shedaniel.autoconfig.serializer.Toml4jConfigSerializer;
+import java.io.File;
+
+import net.johnvictorfs.simple_utilities.config.SimpleUtilitiesConfig;
+
+//? if fabric {
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keybinding.v1.KeyBindingHelper;
-import net.johnvictorfs.simple_utilities.config.SimpleUtilitiesConfig;
+import net.fabricmc.loader.api.FabricLoader;
+import net.johnvictorfs.simple_utilities.util.TextCompat;
 import net.minecraft.client.option.KeyBinding;
-import net.minecraft.text.Text;
 import org.lwjgl.glfw.GLFW;
+//?} elif neoforge {
+/*import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
+import net.neoforged.fml.loading.FMLPaths;
+*///?} elif forge {
+/*import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
+import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.minecraftforge.fml.loading.FMLPaths;
+*///?}
 
-public class SimpleUtilities implements ClientModInitializer {
-    private ConfigHolder<SimpleUtilitiesConfig> configHolder;
+/**
+ * Mod entry point. On Fabric this loads the vendored config, registers the
+ * "toggle HUD" keybinding, and wires the on/off chat message. NeoForge and
+ * Forge builds currently only load config on client setup - the HUD-overlay
+ * mixin (Yarn-mapped internals) has not been ported to Mojang-mapped
+ * targets yet, see PLAN.md. This mirrors the exact pattern
+ * EasierVillagerTrading uses for its own Fabric-first, Forge/NeoForge-stub
+ * split.
+ */
+public class SimpleUtilities
+//? if fabric {
+implements ClientModInitializer
+//?}
+{
 
+    public static final String MODID = "simple_utilities";
+
+    //? if fabric {
     @Override
     public void onInitializeClient() {
-        /*
-          This code runs as soon as Minecraft is in a mod-load-ready state.
-          However, some things (like resources) may still be unitialized.
-          Proceed with mild caution.
-         */
-        System.out.println("Simple Utilities Mod started.");
+        File configDir = FabricLoader.getInstance().getConfigDir().toFile();
+        SimpleUtilitiesConfig.getInstance(configDir);
 
-        this.configHolder = AutoConfig.register(SimpleUtilitiesConfig.class, Toml4jConfigSerializer::new);
-
-        this.registerKeybindings();
+        registerKeybinding(configDir);
     }
 
-    void registerKeybindings() {
+    private void registerKeybinding(File configDir) {
         KeyBinding toggleHudKey = new KeyBinding(
                 "key.simple_utilities.toggle_hud",
                 GLFW.GLFW_KEY_K,
@@ -41,17 +63,35 @@ public class SimpleUtilities implements ClientModInitializer {
             if (client.player == null) return;
 
             if (toggleHudKeybinding.wasPressed()) {
-                SimpleUtilitiesConfig config = this.configHolder.getConfig();
+                SimpleUtilitiesConfig config = SimpleUtilitiesConfig.getInstance(configDir);
 
-                String chatMessage = "key.simple_utilities.toggle_hud.chat_message.on";
-                if (config.statusElements.toggleSimpleUtilitiesHUD) {
-                    chatMessage = "key.simple_utilities.toggle_hud.chat_message.off";
-                }
+                String chatMessageKey = config.toggleSimpleUtilitiesHUD
+                        ? "key.simple_utilities.toggle_hud.chat_message.off"
+                        : "key.simple_utilities.toggle_hud.chat_message.on";
 
-                client.player.sendMessage(Text.translatable(chatMessage), true);
-                config.statusElements.toggleSimpleUtilitiesHUD = !config.statusElements.toggleSimpleUtilitiesHUD;
-                AutoConfig.getConfigHolder(SimpleUtilitiesConfig.class).save();
+                client.player.sendMessage(TextCompat.translatable(chatMessageKey), true);
+                config.toggleSimpleUtilitiesHUD = !config.toggleSimpleUtilitiesHUD;
+                config.save(configDir);
             }
         });
     }
+    //?} elif neoforge {
+    /*@Mod(MODID)
+    public SimpleUtilities(IEventBus modEventBus) {
+        modEventBus.addListener(this::onClientSetup);
+    }
+
+    private void onClientSetup(FMLClientSetupEvent event) {
+        SimpleUtilitiesConfig.getInstance(FMLPaths.CONFIGDIR.get().toFile());
+    }
+    *///?} elif forge {
+    /*@Mod(MODID)
+    public SimpleUtilities() {
+        FMLJavaModLoadingContext.get().getModEventBus().addListener(this::onClientSetup);
+    }
+
+    private void onClientSetup(FMLClientSetupEvent event) {
+        SimpleUtilitiesConfig.getInstance(FMLPaths.CONFIGDIR.get().toFile());
+    }
+    *///?}
 }
