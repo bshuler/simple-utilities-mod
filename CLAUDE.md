@@ -11,9 +11,11 @@ of a broader "keep Bert's mods compiling on current Minecraft" effort.
 
 The mod draws a small on-screen HUD overlay (coordinates/facing, FPS, biome,
 game time, nether-coordinate conversion, held-item durability, sprint
-indicator) and a config file to toggle it. It is Fabric-only in behavior;
-Forge/NeoForge cells currently build but only load config (see "Multi-loader
-scope decisions" below).
+indicator) and a config file to toggle it, plus a toggle keybinding. The
+feature runs identically on every cell in the version×loader matrix -
+Fabric, Forge, and NeoForge alike - via the loader-agnostic
+`HudHooks`/`PlatformCanvas`/`SimpleCanvas` abstraction (see "Multi-loader
+scope decisions" below); there are no config-only stub cells.
 
 ## Fork Provenance
 
@@ -30,9 +32,10 @@ scope decisions" below).
 
 Migrated from upstream's single-version Loom build to a
 **Stonecutter + Stonecraft** multi-version matrix, mirroring the house
-template used by `critical-orientation` (primary reference) and
-`EasierVillagerTrading`/EVT (secondary reference, especially for the
-Fabric-first/Forge-NeoForge-stub split pattern this mod also uses).
+template used by `critical-orientation` (primary reference). The
+HUD-render feature itself follows the sibling **FlightHud** mod's proven
+no-Mixin, loader-official-hook pattern (`HudHooks`/`PlatformCanvas`/
+`SimpleCanvas`) - see "Multi-loader scope decisions" below.
 
 Key structural facts specific to this Stonecraft/Loom setup (worth stating
 explicitly, since they are easy to get wrong by analogy to other Loom
@@ -48,15 +51,16 @@ projects):
   copy under `versions/<mc>-<loader>/build/generated/stonecutter/main/java/...`
   - so a change only "counts" as tested against the active cell until you
     switch active or run `chiseledBuild`.
-- **Mappings default to Mojang official**, not Yarn, unless a cell's
-  `gradle.properties` (or its `versions/dependencies/<mc>.properties`) sets
-  `yarn_mappings`. This fork's Fabric-cell HUD code is written against
-  Yarn/intermediary names (inherited from upstream), so `yarn_mappings` is
-  set per-Fabric-cell; Forge/NeoForge cells are Mojang-mapped stubs and
-  never set it. See `build.gradle.kts`'s comment block and
-  `versions/1.21.4-fabric/gradle.properties` for the exact mechanics,
-  including why NeoForge cells can't share a Fabric cell's `yarn_mappings`
-  property (`yarn_mappings_neoforge_patch` isn't published past MC 1.21).
+- **Mappings are uniformly Mojang official across every cell.** No
+  `yarn_mappings` property is set anywhere in this fork any more (removed
+  from every `versions/dependencies/*.properties` file, and the
+  `versions/1.21.4-fabric/gradle.properties` override that used to set it
+  was deleted outright). This was a deliberate migration, not an
+  oversight: 26.1+ stopped publishing Yarn mappings at all, and moving the
+  *whole* mod to Mojmap (not just 26.2) is what let `GameInfoHud.java`
+  become one loader-agnostic file instead of three divergent Yarn/Mojmap
+  copies. See `build.gradle.kts`'s mappings comment and PLAN.md's "26.2"
+  section for the full rationale.
 - Switch the active cell only via
   `./gradlew "Set active project to <mc>-<loader>"` - never hand-edit
   `stonecutter.gradle.kts`'s active-version state directly.
@@ -70,58 +74,76 @@ several times in this codebase (e.g. `TextCompat.java`'s mapping-name split,
 
 ### Cross-version hotspots found while porting
 
-- **`InGameHud`'s constructor is independently version-split from its
-  `render` method**, and not on a simple `>=`/`<` boundary: 1.19.4 and
-  1.20.1 take a second `ItemRenderer` argument; 1.18.2 and 1.21.4 both use
-  the single-arg form. This is a "hump" in the middle of the range, not a
-  clean split - confirmed by running `javap` against the real merged Yarn
-  jars for all four versions rather than trusting memory. See
-  `GameInfoMixin.java`'s `onInit` injector for the four-way conditional.
-- **Debug-HUD-visibility check is also independently version-split**:
-  `InGameHud.getDebugHud().shouldShowDebugHud()` only exists from 1.21.4
-  onward; 1.18.2/1.19.4/1.20.1 use the plain `GameOptions.debugEnabled`
-  field instead. Also confirmed via `javap`, not memory.
-- **`RegistryKey` moved packages**: `net.minecraft.util.registry.RegistryKey`
-  (1.18.2) became `net.minecraft.registry.RegistryKey` from 1.19 onward.
-  `GameInfoHud.java` conditionally imports whichever one applies.
-- **`DrawContext` didn't exist before 1.20**: `GameInfoMixin`/`GameInfoHud`
-  draw via `MatrixStack` on 1.18.2/1.19.4 and `DrawContext` from 1.20.1 on.
+Superseded by the Mojmap/no-Mixin rewrite: the four Yarn-mapped hotspots
+originally found here (`InGameHud`'s split constructor, the
+`GameOptions.debugEnabled`/`shouldShowDebugHud` version split, the
+`RegistryKey` package rename, and the `DrawContext`-didn't-exist-pre-1.20
+split) all applied to the old Yarn-mapped `GameInfoMixin`-based renderer,
+which has been deleted along with the Mixin infrastructure. The current
+`GameInfoHud.java` never touches `InGameHud`, `MatrixStack`, or a
+Yarn-mapped `RegistryKey` at all - see "Multi-loader scope decisions"
+below for the replacement architecture. Current, Mojmap-era hotspots
+(confirmed via `javap` against real merged/deobfuscated jars at both the
+1.18.2 and 26.2 extremes, not from memory):
+
+- **Three real HUD-canvas API shapes, not one boundary**: `<1.20`
+  (`PoseStack` + `GuiComponent.fill`/`Font.draw`/`drawShadow`), the
+  "classic" `GuiGraphics` shape from 1.20.1 through 1.21.4
+  (`drawString`/`renderItem`), and `>=26.1`'s `GuiGraphicsExtractor`
+  (renamed `text(...)`/`item(...)`, `void`-returning). All three live
+  behind `PlatformCanvas.java`, the one version-conditional file behind
+  `SimpleCanvas`.
+- **`Inventory`'s non-equipment-item accessor was renamed**:
+  `Inventory.items` (public field) through the pre-26.1 range became
+  `Inventory.getNonEquipmentItems()` (method) at 26.1+. `GameInfoHud.java`
+  has no direct Yarn `PlayerInventory.count(Item)` equivalent to fall back
+  on in Mojmap, so it sums manually over both the non-equipment slots and
+  the currently-equipped items list instead.
+- **`Level.dimension()`/`Level.OVERWORLD`/`Level.NETHER`** are uniform
+  across the whole matrix and are what the nether-coordinate-conversion
+  check uses (`ResourceKey<Level>` equality), rather than a string-based
+  dimension-namespace comparison.
 - **Yarn mappings stop being published after 26.1** (Fabric moved to
-  Mojang-official-only from there), and 26.1+ also removed
-  `GuiGraphics`/`DrawContext` in favor of an internal `GuiRenderState`
-  extraction model. See "Multi-loader scope decisions" and PLAN.md's "26.2"
-  section for how this mod handles it.
+  Mojang-official-only from there); the whole mod migrated to Mojmap
+  uniformly rather than keeping a Yarn/Mojmap split. See "Multi-loader
+  scope decisions" and PLAN.md's "26.2" section for the full writeup.
 
 ### Multi-loader scope decisions
 
-Forge/NeoForge cells (and, starting this pass, the 26.2-fabric cell) only
-load config on client setup - they do **not** wire in the HUD-render feature
-or the keybinding/toggle feature. This mirrors EasierVillagerTrading's own
-Fabric-first, Forge/NeoForge-stub split for its own mixin-based feature, and
-is documented directly in `SimpleUtilities.java`'s class javadoc and in each
-of `GameInfoHud.java`/`GameInfoMixin.java`/`GameClientMixin.java`/
-`TextCompat.java`'s file-header comments.
+**Every cell in the matrix carries the real HUD-render + keybinding
+feature.** There are no config-only stub cells any more. An earlier pass
+had scoped Forge/NeoForge (and, when it was added, 26.2-fabric) as
+config-only-on-client-setup stubs, reasoning that the original
+Yarn-mapped, Mixin-based `GameInfoHud`/`GameInfoMixin`/`GameClientMixin`
+would need a near-total re-derivation to run against Mojang-mapped
+targets. The coordinator explicitly rejected that as an acceptable end
+state ("a jar that loads but drops the HUD feature isn't 'supporting'
+that loader"), so the re-derivation was done:
 
-Why: the HUD-render feature is Yarn-mapped end-to-end (`InGameHud`,
-`DrawContext`/`MatrixStack`, `TextRenderer`, `ClientPlayerEntity`,
-`ItemStack`, `PlayerInventory`, `RegistryKey<Biome>`, `Text`, etc. - not just
-the Mixin injection point). Porting it to Mojang-mapped targets (Forge/
-NeoForge, and now Fabric 26.1+) would mean re-deriving nearly every line of
-`GameInfoHud.java` (~380 lines) against different APIs, and - for 26.1+ -
-doing so without Mixin at all, since `InGameHud.render` was removed. That
-full port is out of scope for this pass; see PLAN.md "26.2" for the
-documented follow-up plan (reusing the sibling FlightHud mod's proven
-loader-official-hook pattern instead of reverse-engineering the new
-rendering internals).
+- The whole mod migrated to uniform Mojang-official mappings (no
+  `yarn_mappings` anywhere, on any cell).
+- `GameInfoHud.java` was rewritten from scratch against Mojmap types,
+  drawing only through the `SimpleCanvas` interface - no per-loader
+  divergence in its body at all.
+- `HudHooks.java` (new) registers `GameInfoHud` against each loader's own
+  **official** HUD-render hook per era instead of a Mixin: Fabric
+  `HudRenderCallback` (pre-1.21.2) or `HudElementRegistry` (26.1+);
+  NeoForge `RenderGuiEvent.Post`; Forge `OverlayRegistry`/`ForgeIngameGui`
+  (`<1.19`) or `RegisterGuiOverlaysEvent`/`ForgeGui` (`>=1.19`).
+- `PlatformCanvas.java` (new) is the one version-conditional file behind
+  `SimpleCanvas`, covering the three real drawing-API shapes across the
+  matrix (`<1.20` raw `PoseStack`, the classic `GuiGraphics` shape,
+  `>=26.1`'s `GuiGraphicsExtractor`).
+- The now-unused Mixin infrastructure was deleted outright:
+  `GameInfoMixin.java`, `GameClientMixin.java`,
+  `simple_utilities.mixins.json`, and the `"mixins"` key in
+  `fabric.mod.json`. There is no longer a resource-safety caveat to
+  record about a mixins.json/fabric.mod.json mismatch, because there is
+  no Mixin anywhere in this mod any more.
 
-A resource-safety fact worth recording: `simple_utilities.mixins.json` and
-`fabric.mod.json` unconditionally reference `GameClientMixin`/`GameInfoMixin`
-regardless of loader/version. This is safe to leave as-is even though
-Forge/NeoForge/26.2-fabric never compile those classes - a mismatch there
-only matters at game-launch/Mixin-apply time (out of scope; "build green" is
-the bar for this program, not "run green"), and it's already proven safe
-since Forge/NeoForge cells have shipped this way and built green the whole
-time this fork has existed.
+See PLAN.md's "Multi-loader scope decisions" and "26.2" sections for the
+full before/after writeup and the `unzip -l` class-count proof (every
+cell now packages the identical 8 mod classes).
 
 ## Build System: Stonecutter + Stonecraft
 
@@ -129,9 +151,9 @@ time this fork has existed.
   (conditional compilation), matching the house template.
 - `settings.gradle.kts` declares the version×loader matrix via a small
   `mc(version, vararg loaders)` helper; see "Version matrix" below.
-- No manual `mappings()` block in `build.gradle.kts` - Stonecraft
-  auto-wires mappings from each cell's `yarn_mappings` property (Yarn) or
-  falls back to Mojang official.
+- No manual `mappings()` block in `build.gradle.kts` - Stonecraft falls
+  back to Mojang official mappings for every cell, since no cell sets
+  `yarn_mappings` any more.
 - No `publishMods` block: this fork is not published to Modrinth/CurseForge
   (explicitly out of scope for this program).
 
@@ -158,18 +180,20 @@ successor from 1.20.5 on, hence the loader switch at 1.21.4/26.2.
 
 ## Porting notes by MC version
 
-- **1.18.2 / 1.19.4 / 1.20.1** (Fabric + Forge): full HUD+keybinding feature
-  on Fabric; Forge cells are config-only stubs. See "Cross-version hotspots"
-  above for the constructor/debug-check/RegistryKey deltas across this
-  range.
-- **1.21.4** (Fabric + NeoForge): last classic-numbered, Yarn-mapped
-  version; full feature on Fabric, config-only stub on NeoForge.
-- **26.2** (Fabric + NeoForge): newest stable Minecraft as of this pass.
-  Yarn mappings are no longer published; both cells are config-only stubs
-  (Fabric included, unlike every earlier version) pending a HUD-render port
-  that doesn't require Yarn mappings or a Mixin into the now-removed
-  `InGameHud.render`. See PLAN.md "26.2" for the full writeup and the
-  concrete follow-up plan (FlightHud's `HudHooks`/`PlatformCanvas` pattern).
+- **1.18.2 / 1.19.4 / 1.20.1** (Fabric + Forge): full HUD+keybinding
+  feature on both loaders. Forge's HUD registration API is itself
+  version-split within this range at the 1.19 boundary (`OverlayRegistry`/
+  `ForgeIngameGui` below it, `RegisterGuiOverlaysEvent`/`ForgeGui` at/above
+  it) - see `HudHooks.java`.
+- **1.21.4** (Fabric + NeoForge): last classic-numbered, Yarn-mapped-era
+  version (now built with Mojmap like everything else); full feature on
+  both loaders via `HudRenderCallback` (Fabric) and `RenderGuiEvent.Post`
+  (NeoForge).
+- **26.2** (Fabric + NeoForge): newest stable Minecraft. Yarn mappings are
+  no longer published for it, which is exactly why the whole mod moved to
+  Mojmap; full feature on both loaders (Fabric via `HudElementRegistry`,
+  since `HudRenderCallback` doesn't exist here; NeoForge unchanged from
+  1.21.4's `RenderGuiEvent.Post`). See PLAN.md "26.2" for the full writeup.
 
 ## Environment notes
 

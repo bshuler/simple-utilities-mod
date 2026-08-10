@@ -43,13 +43,14 @@ stonecutter {
         // this exact situation: don't reverse-engineer GuiRenderState, hook
         // each loader's own official HUD-render event/registry instead
         // (Fabric HudElementRegistry/HudRenderCallback, NeoForge
-        // RenderGuiEvent.Post). This mod's own HUD-render code (GameInfoHud/
-        // GameInfoMixin) has NOT been ported to that pattern yet - it's
-        // Yarn-mapped and Mixin-based, so it's scoped out of 26.2-fabric for
-        // now the same way it's already scoped out of Forge/NeoForge (config
-        // load only). See PLAN.md "26.2" section for the follow-up port plan.
+        // RenderGuiEvent.Post, Forge OverlayRegistry/RegisterGuiOverlaysEvent).
+        // This mod's HUD-render code (GameInfoHud, now driven by HudHooks
+        // instead of a Mixin) was fully ported to that pattern and to uniform
+        // Mojang-official mappings - the real feature now runs on every cell
+        // in the matrix, not just Fabric<26.1. See PLAN.md "26.2" for the
+        // full writeup.
 
-        // 26.2 - Fabric + NeoForge (newest stable; HUD render deferred, see above)
+        // 26.2 - Fabric + NeoForge (newest stable; full HUD+keybinding feature)
         mc("26.2", "fabric", "neoforge")
         // 1.21.4 - Fabric + NeoForge (last classic-numbered Yarn-mapped version)
         mc("1.21.4", "fabric", "neoforge")

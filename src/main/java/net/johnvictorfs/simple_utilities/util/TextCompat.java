@@ -1,42 +1,84 @@
 package net.johnvictorfs.simple_utilities.util;
 
-//? if fabric && <26.1 {
-import net.minecraft.text.Text;
+import net.minecraft.resources.ResourceKey;
+
 //? if >=1.19 {
+import net.minecraft.network.chat.Component;
 //?} else {
-/*import net.minecraft.text.TranslatableText;
+/*import net.minecraft.network.chat.BaseComponent;
+import net.minecraft.network.chat.TextComponent;
+import net.minecraft.network.chat.TranslatableComponent;
 *///?}
-//?}
 
 /**
- * Bridges the Yarn-mapped translatable-text API across the fork's Fabric
- * version range. {@code Text.translatable(key, args...)} is the modern
- * factory method (introduced ~1.19); on 1.18.2 the equivalent is the
- * {@code TranslatableText} constructor directly. Keeping this in one place
- * means {@code GameInfoHud}/{@code SimpleUtilities} don't need their own
- * per-version branches for every translation call.
+ * Bridges the Mojmap translatable/literal-text API across the whole
+ * version×loader matrix. {@code Component.translatable(key, args...)} /
+ * {@code Component.literal(text)} are the modern static factories on the
+ * {@code Component} interface itself (confirmed via {@code javap} present
+ * from 1.19.4 onward, identical signature through 26.2); on 1.18.2 there are
+ * no such factories on {@code Component} at all - the equivalents are the
+ * {@code TranslatableComponent}/{@code TextComponent} constructors (both
+ * {@code extends BaseComponent}). Keeping this in one place means
+ * {@code GameInfoHud}/{@code SimpleUtilities} don't need their own
+ * per-version branches for every translation/literal call.
  *
- * <p>Fabric-only (and only below 26.1): Forge/NeoForge cells, and Fabric
- * 26.1+ (which stopped publishing Yarn mappings), don't wire in the
- * HUD-rendering feature at all (see PLAN.md), so this class is guarded to
- * compile to an empty (package-only) file on those targets, matching the
- * house pattern used by EasierVillagerTrading's mixin classes.
+ * <p>Loader-agnostic and used by every cell in the matrix (Fabric, Forge,
+ * NeoForge) now that the whole mod builds against uniform Mojang-official
+ * mappings - unlike the old Yarn-mapped version of this class, this one is
+ * not gated to Fabric at all.
  */
-//? if fabric && <26.1 {
 public final class TextCompat {
     private TextCompat() {
     }
 
-    public static Text translatable(String key, Object... args) {
-        //? if >=1.19 {
-        return Text.translatable(key, args);
-        //?} else {
-        /*return new TranslatableText(key, args);
-        *///?}
+    //? if >=1.19 {
+    public static Component translatable(String key, Object... args) {
+        return Component.translatable(key, args);
     }
+
+    public static Component literal(String text) {
+        return Component.literal(text);
+    }
+    //?} else {
+    /*public static BaseComponent translatable(String key, Object... args) {
+        return new TranslatableComponent(key, args);
+    }
+
+    public static BaseComponent literal(String text) {
+        return new TextComponent(text);
+    }
+    *///?}
 
     public static String translatableString(String key, Object... args) {
         return translatable(key, args).getString();
     }
+
+    /**
+     * {@code net.minecraft.resources.ResourceLocation} was renamed to
+     * {@code net.minecraft.resources.Identifier} at 26.1+ (matching Fabric's
+     * own {@code Identifier} naming - confirmed via {@code javap}), and
+     * {@code ResourceKey#location()} was renamed to {@code identifier()} in
+     * lockstep. {@code ResourceKey} itself (this method's parameter type)
+     * keeps the same name/package at every version, so these two methods are
+     * the only version-split needed to read a key's namespace/path - used by
+     * {@code GameInfoHud} for the dimension id (nether-coordinate
+     * conversion) and the biome registry key (biome name line).
+     */
+    //? if >=26.1 {
+    /*public static String keyNamespace(ResourceKey<?> key) {
+        return key.identifier().getNamespace();
+    }
+
+    public static String keyPath(ResourceKey<?> key) {
+        return key.identifier().getPath();
+    }
+    *///?} else {
+    public static String keyNamespace(ResourceKey<?> key) {
+        return key.location().getNamespace();
+    }
+
+    public static String keyPath(ResourceKey<?> key) {
+        return key.location().getPath();
+    }
+    //?}
 }
-//?}
