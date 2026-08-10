@@ -30,22 +30,52 @@ public abstract class GameInfoMixin {
     @Final
     private MinecraftClient client;
 
+    // InGameHud's constructor is ALSO independently version-split, and NOT on
+    // the same boundary as the render-param split above: it takes a second
+    // ItemRenderer parameter on 1.19.4 and 1.20.1 ONLY (confirmed via javap on
+    // all four real merged Yarn jars) - 1.18.2 and 1.21.4 both use the
+    // single-arg constructor, so this is a "hump" in the middle of the
+    // version range, not a simple >=/< split.
+    //? if >=1.19 {
+    //? if >=1.21 {
     @Inject(method = "<init>(Lnet/minecraft/client/MinecraftClient;)V", at = @At(value = "RETURN"))
     private void onInit(MinecraftClient client, CallbackInfo ci) {
         this.hudInfo = new GameInfoHud(client);
     }
+    //?} else {
+    /*@Inject(method = "<init>(Lnet/minecraft/client/MinecraftClient;Lnet/minecraft/client/render/item/ItemRenderer;)V", at = @At(value = "RETURN"))
+    private void onInit(MinecraftClient client, net.minecraft.client.render.item.ItemRenderer itemRenderer, CallbackInfo ci) {
+        this.hudInfo = new GameInfoHud(client);
+    }
+    *///?}
+    //?} else {
+    /*@Inject(method = "<init>(Lnet/minecraft/client/MinecraftClient;)V", at = @At(value = "RETURN"))
+    private void onInit(MinecraftClient client, CallbackInfo ci) {
+        this.hudInfo = new GameInfoHud(client);
+    }
+    *///?}
 
+    // Debug-HUD-visible check is ALSO version-split, independently of the
+    // render-param split above: InGameHud.getDebugHud().shouldShowDebugHud()
+    // only exists from 1.21.4 onward (confirmed via javap on the real merged
+    // Yarn jars). On 1.18.2/1.19.4/1.20.1, the equivalent flag is the plain
+    // GameOptions.debugEnabled field (also confirmed via javap - no
+    // per-DebugHud visibility method exists there at all).
     //? if >=1.20 {
     @Inject(method = "render", at = @At("HEAD"))
     private void onDraw(DrawContext context, float tickDelta, CallbackInfo ci) {
+        //? if >=1.21 {
         if (!this.client.inGameHud.getDebugHud().shouldShowDebugHud()) {
+        //?} else {
+        /*if (!this.client.options.debugEnabled) {
+        *///?}
             this.hudInfo.draw(context);
         }
     }
     //?} else {
     /*@Inject(method = "render", at = @At("HEAD"))
     private void onDraw(MatrixStack matrices, float tickDelta, CallbackInfo ci) {
-        if (!this.client.inGameHud.getDebugHud().shouldShowDebugHud()) {
+        if (!this.client.options.debugEnabled) {
             this.hudInfo.draw(matrices);
         }
     }

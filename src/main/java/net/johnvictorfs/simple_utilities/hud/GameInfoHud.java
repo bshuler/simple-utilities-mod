@@ -24,7 +24,11 @@ import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.client.resource.language.I18n;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.ItemStack;
+//? if >=1.19 {
 import net.minecraft.registry.RegistryKey;
+//?} else {
+/*import net.minecraft.util.registry.RegistryKey;
+*///?}
 import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.MathHelper;
 import net.minecraft.util.math.Vec3d;

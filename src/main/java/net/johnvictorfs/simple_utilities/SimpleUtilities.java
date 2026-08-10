@@ -33,6 +33,11 @@ import net.minecraftforge.fml.loading.FMLPaths;
  * EasierVillagerTrading uses for its own Fabric-first, Forge/NeoForge-stub
  * split.
  */
+//? if neoforge {
+/*@Mod(SimpleUtilities.MODID)
+*///?} elif forge {
+/*@Mod(SimpleUtilities.MODID)
+*///?}
 public class SimpleUtilities
 //? if fabric {
 implements ClientModInitializer
@@ -76,8 +81,7 @@ implements ClientModInitializer
         });
     }
     //?} elif neoforge {
-    /*@Mod(MODID)
-    public SimpleUtilities(IEventBus modEventBus) {
+    /*public SimpleUtilities(IEventBus modEventBus) {
         modEventBus.addListener(this::onClientSetup);
     }
 
@@ -85,8 +89,7 @@ implements ClientModInitializer
         SimpleUtilitiesConfig.getInstance(FMLPaths.CONFIGDIR.get().toFile());
     }
     *///?} elif forge {
-    /*@Mod(MODID)
-    public SimpleUtilities() {
+    /*public SimpleUtilities() {
         FMLJavaModLoadingContext.get().getModEventBus().addListener(this::onClientSetup);
     }
 
