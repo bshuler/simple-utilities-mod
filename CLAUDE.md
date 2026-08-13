@@ -174,14 +174,16 @@ Homebrew-default OpenJDK or install a system JDK.
 
 ```sh
 export JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home
-./gradlew ":1.21.4-fabric:test"    # run the JUnit 5 suite (active cell only)
+./gradlew ":1.21.4-fabric:test"    # run the JUnit 5 suite for one cell
 ./gradlew ":1.21.4-fabric:check"   # test + JaCoCo coverage verification (100% LINE, enforced)
+./gradlew test                     # run the suite on EVERY cell in the matrix
 ```
 
-Tests run only against the active Stonecutter cell (`1.21.4-fabric`) -
-never across the whole matrix; switch cells only via
-`./gradlew "Set active project to <cell>"`, then switch back. Coverage
-report: `versions/1.21.4-fabric/build/reports/jacoco/test/html/index.html`.
+A bare `./gradlew test` runs the suite on **every** cell, not just the
+active one - so any new test must compile and pass on all ten, 1.18.2
+included. Coverage verification is per-cell; the `1.21.4-fabric` report
+lands at `versions/1.21.4-fabric/build/reports/jacoco/test/html/index.html`.
+Switch the active cell only via `./gradlew "Set active project to <cell>"`.
 See PLAN.md "Phase 2 (test coverage)" for the full included/excluded-class
 table and rationale (in short: `GameInfoMath`/`SimpleUtilitiesConfig`/
 `Colors` are pure/headless-safe and 100% tested;
@@ -196,6 +198,40 @@ like `src/main/java`, and `check`/`test` run identically on every cell -
 so any new test that references a Minecraft class must be verified
 against a full `./gradlew chiseledBuild`, not just the active cell,
 before being trusted as "headless-safe."
+
+### Loaded-game tests (Tier 1)
+
+`src/test/java/net/johnvictorfs/simple_utilities/LoadedGameTest.java` runs
+against a **real bootstrapped Minecraft and a real Fabric loader**, not
+mocks, via `net.fabricmc:fabric-loader-junit` (declared under
+`if (mod.isFabric)` in `build.gradle.kts`). The whole file is wrapped in
+`//? if fabric { ... //?}`, so Forge/NeoForge cells compile it away
+entirely - NeoForge's equivalent bootstrap (junit-fml) is ModDevGradle-only
+and unavailable under Architectury Loom, which is why the junit-fml
+exclusion further down `build.gradle.kts` still stands.
+
+- **Verified, not assumed**: 9 tests × 5 Fabric cells, all green, read out
+  of `versions/*/build/test-results/test/TEST-*LoadedGameTest.xml`
+  (~20-28s per cell). `BUILD SUCCESSFUL` alone does not prove the tests
+  ran - always parse the XML.
+- Two Stonecutter splits live in this file: the `//? if >=1.19.3`
+  `Registry.ITEM` -> `BuiltInRegistries.ITEM` rename, and a `//? if >=26.1`
+  extra bootstrap step (see next bullet).
+- **26.x needs an extra bootstrap step.** Through 1.21.4 an item's data
+  components were baked into the `Item` at construction; in 26.x they are
+  produced by `BuiltInRegistries.DATA_COMPONENT_INITIALIZERS` from a
+  `HolderLookup.Provider` and bound onto each `Holder.Reference`
+  afterwards. Constructing any `ItemStack` before that runs throws
+  `NullPointerException: Components not bound yet`. `@BeforeAll` therefore
+  runs `DATA_COMPONENT_INITIALIZERS.build(VanillaRegistries.createLookup())`
+  and applies the pending components, guarded to `>=26.1`.
+- `TextCompat` is exercised here even though it is excluded from the JaCoCo
+  bundle - the exclusion is about *headless* coverage, and a bootstrapped
+  game is exactly what makes its 1.19 mapping split testable for real.
+- What Tier 1 does **not** cover: anything needing a window or a live
+  `Minecraft` instance - `GameInfoHud`'s actual draw path, `PlatformCanvas`,
+  `HudHooks`' registration against each loader's HUD event, and the
+  keybinding. Those are Tier 3 (client gametest under xvfb), not yet wired.
 
 ## Version matrix
 

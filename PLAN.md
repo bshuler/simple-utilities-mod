@@ -429,3 +429,100 @@ Read from the JaCoCo XML report, not from whether the gate passes:
 
 A passing `check` means "no regression inside the analysed surface" — it does not
 mean the whole codebase is tested to that percentage.
+
+## Tier 1: loaded-game testing (added 2026-08-13)
+
+The tests above are all pure-logic: they prove the HUD's arithmetic is
+self-consistent, with every input hand-written. They cannot prove the
+*game data those numbers describe* still looks the way the mod assumes.
+`src/test/java/net/johnvictorfs/simple_utilities/LoadedGameTest.java`
+closes that gap by standing a real Fabric loader and a real bootstrapped
+Minecraft up inside the JUnit worker (`net.fabricmc:fabric-loader-junit`,
+declared under `if (mod.isFabric)`), then asserting against genuinely
+loaded registries, items and vanilla constants.
+
+Nine tests:
+
+1. `gameDataIsActuallyLoaded` - harness guard. `Items.DIAMOND_PICKAXE`
+   resolves to `minecraft:diamond_pickaxe` and the item registry holds
+   500+ entries. Without this, a silently no-op bootstrap would make every
+   other assertion vacuous. Carries the `//? if >=1.19.3`
+   `Registry.ITEM` -> `BuiltInRegistries.ITEM` split.
+2. `modIsDiscoveredByARealFabricLoader` - the *processed* `fabric.mod.json`
+   (Stonecraft templating already applied) is on the test classpath, so a
+   real loader discovers this mod exactly as the game would. Malformed or
+   mis-templated metadata fails here rather than at first launch.
+3. `declaredDependencyRangesAreSatisfiableInThisCell` - the real drift
+   hazard in a Stonecutter matrix: a cell can compile and package flawlessly
+   while declaring a `minecraft` range that excludes the very version it was
+   built for. The loader resolves every `DEPENDS` range against the
+   actually-loaded versions, per cell.
+4. `textCompatBuildsRealComponentsOnThisCell` - exercises the mod's one
+   text-API version split for real: `literal(...)` round-trips its text
+   verbatim, `translatable(...)` builds a non-null component whose
+   `getString()` is never blank, and `translatableString(...)` survives the
+   split too.
+5. `everyRealHorizontalDirectionHasALangKeyAndAnOffset` - iterates
+   `Direction.Plane.HORIZONTAL` (whatever the *game* says the horizontal
+   facings are, not a hand-written list of four) and asserts each
+   `text.direction.simple_utilities.<serializedName>` key exists in the
+   shipped `en_us.json`, and that `GameInfoMath.getOffset(stepX, stepZ)`
+   agrees with vanilla's independent `getAxis()`/`getAxisDirection()`
+   metadata. A renamed serialized name shows up here instead of as a raw
+   key on screen.
+6. `speedReadoutUsesTheGamesOwnTickRate` - pins `formatSpeed`'s hardcoded
+   `0.05F` divisor to `SharedConstants.TICKS_PER_SECOND`, so a tick-rate
+   change can't silently skew the m/s readout.
+7. `clockWrapsExactlyAtTheGamesDayLength` - anchors `parseTime`'s +6h
+   offset and 24h wrap to `SharedConstants.TICKS_PER_GAME_DAY` rather than
+   to a literal 24000: tick 0 is 6:00 AM, a quarter-day is noon, three
+   quarters is midnight, and a whole day wraps back to tick 0. Sweeps the
+   day for malformed readouts.
+8. `durabilityColorsFollowRealItemDurability` - damages a real
+   `ItemStack(Items.DIAMOND_PICKAXE)` and reproduces `GameInfoHud`'s
+   `maxDamage - damageValue` exactly, asserting the default ->
+   green -> yellow -> orange -> red bands land where the game's own
+   durability puts them.
+9. `everyStaticallyReferencedLangKeyIsTranslated` - every keybinding,
+   category, chat-message and HUD-label key named as a string literal in
+   `src/main/java` has an entry in the shipped `en_us.json`. Nothing in the
+   compiler catches a key that only exists in code.
+
+**Verified, not assumed.** Ran on all five Fabric cells, 9 tests each,
+0 failures / 0 errors / 0 skipped, read out of
+`versions/*/build/test-results/test/TEST-*LoadedGameTest.xml` (1.18.2
+20.1s, 1.19.4 24.0s, 1.20.1 24.6s, 1.21.4 28.2s, 26.2 25.7s). The five
+Forge/NeoForge cells contain only the three pure-logic test classes, as
+intended. `:1.21.4-fabric:check` (JaCoCo 100% LINE gate) still passes.
+
+### This does not reverse the `TextCompatTest` finding
+
+Phase 2 recorded that a `TextCompatTest.java` was reverted because it broke
+8 of the other 9 cells. That finding stands and the reasoning is unchanged:
+an *unguarded* test in `src/test/java` compiles on every cell in the matrix,
+including the five that have no loaded-game bootstrap available. Test 4
+above is legal only because the entire file is wrapped in
+`//? if fabric { ... //?}` **and** a real game is bootstrapped first.
+`TextCompat` also stays excluded from the JaCoCo bundle - the exclusion is
+about what is provably testable *headless*, which is a different question.
+
+### 26.x needs an extra bootstrap step
+
+Through 1.21.4 an item's data components were baked into the `Item` at
+construction, so `Bootstrap.bootStrap()` alone was enough to build an
+`ItemStack`. In 26.x they are produced by
+`BuiltInRegistries.DATA_COMPONENT_INITIALIZERS` from a
+`HolderLookup.Provider` - i.e. from loaded registry data - and bound onto
+each `Holder.Reference` afterwards; constructing any `ItemStack` before
+that throws `NullPointerException: Components not bound yet`. `@BeforeAll`
+runs `DATA_COMPONENT_INITIALIZERS.build(VanillaRegistries.createLookup())`
+and applies the pending components, guarded `//? if >=26.1`.
+
+### What Tier 1 does *not* cover
+
+Anything needing a window or a live `Minecraft` instance: `GameInfoHud`'s
+actual draw path, `PlatformCanvas`'s three drawing-API shapes, `HudHooks`'
+registration against each loader's own HUD event, and the toggle
+keybinding. Those need Tier 3 (Fabric client gametest under xvfb), which is
+not wired here yet. Tier 4 (NeoForge `testframework`) remains blocked: it
+is ModDevGradle-only and this repo builds on Architectury Loom.
