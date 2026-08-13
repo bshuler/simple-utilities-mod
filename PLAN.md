@@ -324,6 +324,20 @@ were wired defensively but not empirically triggered here:
   `tasks.matching { it.name == "compileTestJava" }.configureEach {
   dependsOn(tasks.matching { it.name == "generatePackMCMetaJson" }) }`.
 
+**What this exclusion costs (recorded 2026-08-13).** `junit-fml` is precisely
+NeoForge's own *loaded-test bootstrap* — it is what stands FML up so a test can
+run against a real, loaded game. Excluding it is the right call here, but it is
+a Loom-specific workaround, not a universal fix. NeoForge's supported
+loaded-test path (`neoForge { unitTest { enable(); testedMod = ... } }`, the
+`net.neoforged:testframework` artifact,
+`@ExtendWith(EphemeralTestServerProvider.class)` injecting a live
+`MinecraftServer`, and `gradlew runGameTestServer`) is **ModDevGradle-only**,
+and this repo builds on Architectury Loom via Stonecraft, so that path is
+unavailable here regardless. The exclusion therefore costs nothing today — but
+if a cell is ever migrated to ModDevGradle, revisit it before writing any
+loaded NeoForge test, because it would silently disable the very bootstrap
+such a test depends on.
+
 ### Folia
 
 Folia n/a - client mod.
@@ -402,3 +416,16 @@ Folia n/a - client mod.
   work on several sibling mods, and has previously caused Loom/toolchain
   cache corruption requiring manual cleanup. Not this mod-specific and out
   of scope to fix here, but flagged for whoever picks up the next pass.
+
+## Coverage in context (measured 2026-08-13)
+
+Read from the JaCoCo XML report, not from whether the gate passes:
+
+- **Analysed surface:** 4 of 9 compiled classes (44%).
+- **Line coverage of that surface:** 100.0% (117 lines analysed).
+- Classes outside that surface are excluded by the documented exclusion list. They
+  are not covered by any test and are not runtime-verified.
+  Measured from `simple-utilities-mod/versions/1.18.2-fabric/build/reports/jacoco/test/jacocoTestReport.xml`.
+
+A passing `check` means "no regression inside the analysed surface" — it does not
+mean the whole codebase is tested to that percentage.
