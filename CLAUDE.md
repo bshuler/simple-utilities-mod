@@ -239,8 +239,8 @@ successor from 1.20.5 on, hence the loader switch at 1.21.4/26.2.
 - Default branch `main`; commit and push directly to `origin/main` without
   asking - no PR, no feature branch.
 - Never push to `upstream`; never force-push; never delete branches/tags.
-- Never commit anything under `.github/workflows/` (the automation account
-  pushing this repo's commits lacks the `workflow` OAuth scope). Proposed CI
-  YAML, if ever needed, goes to a scratch file instead, called out in the
-  session's final report.
+- `.github/workflows/` changes are pushable. The `bshuler` gh token gained the
+  `workflow` OAuth scope on 2026-08-13; earlier notes in this repo saying it
+  lacks that scope are obsolete. No CI YAML needs to be parked in a scratchpad
+  any more.
 - Commit incrementally per milestone with conventional-style titles.
