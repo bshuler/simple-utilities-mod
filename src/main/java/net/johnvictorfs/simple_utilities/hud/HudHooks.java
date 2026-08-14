@@ -63,6 +63,25 @@ public final class HudHooks {
     private HudHooks() {
     }
 
+    /**
+     * Whether {@link #render} has run at least once in this JVM - i.e. whether
+     * the loader/version-specific hook registered by {@link #register()} is one
+     * this Minecraft version actually fires.
+     *
+     * <p>Exists for the Tier 3 client gametest, which has no other way to
+     * observe that: the render path returns void, draws straight to a
+     * {@link SimpleCanvas}, and leaves nothing else behind. The lazily-created
+     * {@code hud} field is the one durable trace, and it is assigned inside
+     * {@code render} before {@link GameInfoHud#draw} is called - so a true
+     * reading proves the hook fired, independently of whether the config had
+     * the overlay switched on. That is exactly the failure this mod is prone
+     * to: a hook that no longer fires still compiles, packages and loads while
+     * drawing nothing (see this class's doc on the 26.1 {@code Gui} change).
+     */
+    public static boolean hasRendered() {
+        return hud != null;
+    }
+
     private static void render(SimpleCanvas canvas) {
         // Debug-HUD-visible guard, moved in from the old GameInfoMixin's
         // onDraw injector (which gated the call to hudInfo.draw(...) on this

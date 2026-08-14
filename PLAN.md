@@ -526,3 +526,147 @@ registration against each loader's own HUD event, and the toggle
 keybinding. Those need Tier 3 (Fabric client gametest under xvfb), which is
 not wired here yet. Tier 4 (NeoForge `testframework`) remains blocked: it
 is ModDevGradle-only and this repo builds on Architectury Loom.
+
+## Tier 3: client gametest under a real Minecraft client (added 2026-08-13)
+
+`src/gametest/java/net/johnvictorfs/simple_utilities/gametest/SimpleUtilitiesClientGameTest.java`
+launches a **real Minecraft client** - real window, GL context, render
+thread, game loop and world - with this mod loaded, via
+`fabric-client-gametest-api-v1` and Loom's generated `runClientGameTest`
+task. It is the only tier that can see a rendered frame.
+
+### Scope: two cells, and why not more
+
+| Cell | Client-gametest API | Tier 3 |
+|---|---|---|
+| `26.2-fabric` | v6.0.0 | yes |
+| `1.21.4-fabric` | v4.1.1 | yes |
+| 1.20.1 / 1.19.4 / 1.18.2 fabric | - | no: the module does not exist below ~1.21.2 |
+| all forge / neoforge cells | - | no: Fabric-only API; NeoForge's equivalent is ModDevGradle-only (see the junit-fml note in `build.gradle.kts`) |
+
+Gated in `build.gradle.kts` by
+`clientGameTestSupported = mod.isFabric && stonecutter.eval(current, ">=1.21.4")`.
+The two supported cells ship *different major versions* of the API, so the
+single un-branched test file uses only their common surface -
+`TestSingleplayerContext.getClientWorld()` (v4 only) and `getConnection()`
+(v6 only) are both avoided.
+
+### Two Stonecraft/Loom conflicts that had to be fixed first
+
+Stonecraft's `loom.runs.all { }` hook touches every run config, including
+the one Loom generates for client gametests:
+
+1. it appends `--username=developer`, which the gametest config already
+   sets - two `--username` args make joptsimple throw
+   `MultipleArgumentsForOptionException` before the client starts;
+2. it calls `setRunDir` to the repo-root `run/`. Loom's gametest config
+   defaults `clearRunDirectory = true` and registers a `Delete` task over
+   it, so this would have **deleted the developer's own dev-world run
+   directory**.
+
+Both are undone for the `clientGameTest` config only, in an `afterEvaluate`
+block. **The API used there differs from the sibling FlightHud repo's and
+that is not stylistic**: this repo is on Architectury Loom 1.17.491 (FlightHud
+is on 1.14.476), where `getProgramArgs()` returns an immutable copy and
+`programArgs.removeAll { }` fails at configuration time with a bare
+`UnsupportedOperationException` out of `ImmutableList.set`. Both `programArgs`
+and `runDir` are deprecated in 1.17; the supported replacement (confirmed by
+`javap` on `net.fabricmc.loom.api.RunConfiguration` in the Loom jar, not
+guessed) is the `programArguments` `ListProperty` / `runDirectory`
+`DirectoryProperty` pair.
+
+### The bug Tier 3 caught on its first run: an invisible HUD on 26.x
+
+Worth recording in full, because every other tier in this repo passed
+straight through it.
+
+The first version of the test asserted `HudHooks.hasRendered()` - that the
+render hook fired. Both cells went green. **Looking at the screenshots
+showed the 26.2 frame had no HUD on it at all**, while 1.21.4's showed all
+four lines. `BUILD SUCCESSFUL` was true and meaningless.
+
+Root cause, confirmed by `javap -c` against both real Minecraft jars:
+
+- 1.21.4's `net.minecraft.client.gui.Font` has a private
+  `adjustColor(int)` - `if ((color & 0xFC000000) == 0) return
+  ARGB.opaque(color);` (the bytecode tests against `-67108864`);
+- 26.2's `Font` has **no such method and no such constant**.
+
+Every colour constant in `Colors`, and `SimpleUtilitiesConfig.textColor`'s
+default `0x00E0E0E0`, has a zero alpha byte. Through 1.21.4 vanilla quietly
+promoted those to opaque; on 26.x they are drawn exactly as asked - fully
+transparent. The mod was rendering perfectly and invisibly.
+
+Fixed by `Colors.opaqueIfNoAlpha(int)`, applied in all three
+`PlatformCanvas.drawText` branches. Deliberately **not** fixed by adding
+`0xFF` to the constants: `config.textColor` is user-supplied and already
+persisted to disk, so existing configs would still be invisible (the repo's
+own `SimpleUtilitiesConfigTest` round-trips `"0xFF00FF"`, itself alpha-0).
+Deliberately **not** applied to `PlatformCanvas.fill` either: vanilla never
+did the fixup for fills, so adding it there would change behaviour rather
+than preserve it. `Colors` is in the enforced 100%-LINE JaCoCo bundle, so
+four cases were added to `ColorsTest` covering promotion, alpha
+preservation, vanilla's exact `0xFC` threshold and black.
+
+### The assertion had to be strengthened too
+
+`hasRendered()` was true throughout the invisible-HUD failure - it proves
+the hook fired, not that anything reached the screen. The test now asserts
+**pixels**, with no golden image, no fixed resolution and no per-version
+reference art (one file serves two Minecraft versions, a Mac laptop and a
+software-rendered CI box):
+
+1. overlay off, screenshot; wait 20 ticks; overlay off, screenshot again -
+   the difference is the **ambient noise floor**;
+2. overlay on, wait 20 ticks, screenshot - the difference from (1) is that
+   same noise **plus** whatever the mod drew;
+3. subtract, and require at least 300 attributable pixels in the top-left
+   quadrant, where `GameInfoHud` draws its game-info lines.
+
+If the noise floor itself exceeds 10% of the region the test **fails rather
+than guessing** - a reading that noisy cannot honestly be interpreted either
+way.
+
+The per-channel threshold of 64 is measured, not chosen. At 8 both cells
+failed the noise ceiling: 42% of the region changed between two consecutive
+overlay-off frames. Rendering that difference as an image showed a smooth
+whole-frame radial gradient - sky and terrain lighting drifting as the sun
+moves. Its amplitude is bounded: over the whole frame ~91k pixels differ by
+more than 8, ~18k by more than 16, ~100 by more than 32, and **zero** by more
+than 64. Shadowed glyphs are the opposite shape - few pixels, huge amplitude
+- and measure ~3,500 pixels above 64. Two orders of magnitude of separation.
+
+The equipment/durability block is bottom-left, outside the measured region
+and next to the constantly-animating vanilla hotbar and hunger bars. Its
+toggle is still forced on, so it is exercised (and any exception it throws
+still crashes the client and fails the run) - just not measured.
+
+### Verified, not assumed (2026-08-13)
+
+- both cells `BUILD SUCCESSFUL` with the pixel assertion live, exit codes
+  read out of the logs rather than inferred from a task summary;
+- the 26.2 in-world screenshot was **looked at**: `0, -60, 0 (South +Z)`,
+  `118 fps`, `Biome: Plains`, `6:00 AM` all legible. Same on 1.21.4;
+- **negative control**: reverting `opaqueIfNoAlpha` in the 26.1 branch of
+  `PlatformCanvas` alone made 26.2 fail with
+  `attributable to the overlay = 0 px` and the "hook fires but the overlay
+  is not visible" message. The assertion is not vacuous, and it catches
+  exactly the bug it was written for;
+- full 10-cell `chiseledBuild` green with the fix and the new tests,
+  including the enforced 100% LINE JaCoCo gate on every cell.
+
+### CI
+
+`.github/workflows/build.yml` was rewritten in the same pass. Upstream's
+version **could not have run in this fork at all**: it triggered on `master`
+(this repo is on `main`), pinned the retired `ubuntu-20.04`, and used
+`actions/checkout@v2`, `actions/setup-java@v1` and the deprecated
+`gradle/wrapper-validation-action@v1`; it also ran plain `./gradlew build`,
+i.e. the active cell only. The replacement runs `chiseledBuild` across all
+10 cells, then a `client-gametest` matrix over `1.21.4-fabric` and
+`26.2-fabric` under `xvfb-run` with software OpenGL
+(`LIBGL_ALWAYS_SOFTWARE`, Mesa), uploading screenshots and logs on failure.
+
+`release.yml` and `codeql-analysis.yml` are **still stale** - both are
+`master`-triggered and have never run in this fork. Deliberately left alone
+in this pass; they are release/scanning concerns, not test infrastructure.

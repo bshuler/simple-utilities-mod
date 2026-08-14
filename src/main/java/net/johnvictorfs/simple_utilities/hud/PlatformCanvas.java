@@ -9,6 +9,7 @@ import net.minecraft.client.gui.GuiComponent;
 import net.minecraft.client.gui.GuiGraphics;
 //?}
 
+import net.johnvictorfs.simple_utilities.helpers.Colors;
 import net.minecraft.client.gui.Font;
 import net.minecraft.world.item.ItemStack;
 
@@ -54,10 +55,11 @@ public final class PlatformCanvas implements SimpleCanvas {
 
     @Override
     public int drawText(Font font, String text, int x, int y, int color, boolean shadow) {
+        int argb = Colors.opaqueIfNoAlpha(color);
         if (shadow) {
-            return font.drawShadow(pose, text, (float) x, (float) y, color);
+            return font.drawShadow(pose, text, (float) x, (float) y, argb);
         }
-        return font.draw(pose, text, (float) x, (float) y, color);
+        return font.draw(pose, text, (float) x, (float) y, argb);
     }
 
     @Override
@@ -86,7 +88,9 @@ public final class PlatformCanvas implements SimpleCanvas {
 
     @Override
     public int drawText(Font font, String text, int x, int y, int color, boolean shadow) {
-        context.text(font, text, x, y, color, shadow);
+        // opaqueIfNoAlpha matters most on this branch: 26.x removed Font's own
+        // alpha fixup, so without it every line this mod draws is transparent.
+        context.text(font, text, x, y, Colors.opaqueIfNoAlpha(color), shadow);
         return x + font.width(text);
     }
 
@@ -113,7 +117,7 @@ public final class PlatformCanvas implements SimpleCanvas {
 
     @Override
     public int drawText(Font font, String text, int x, int y, int color, boolean shadow) {
-        return context.drawString(font, text, x, y, color, shadow);
+        return context.drawString(font, text, x, y, Colors.opaqueIfNoAlpha(color), shadow);
     }
 
     @Override

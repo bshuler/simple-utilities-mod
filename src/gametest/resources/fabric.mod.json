@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "simple-utilities-gametest",
+  "version": "1.0.0",
+  "name": "Simple HUD Utilities Client Game Test",
+  "description": "Tier 3 client gametest for Simple HUD Utilities. Never shipped: this source set is not part of any published jar.",
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "fabric-client-gametest": [
+      "net.johnvictorfs.simple_utilities.gametest.SimpleUtilitiesClientGameTest"
+    ]
+  },
+  "depends": {
+    "simple_utilities": "*"
+  }
+}

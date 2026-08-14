@@ -160,20 +160,25 @@ cell now packages the identical 8 mod classes).
 ### Build commands
 
 ```sh
-export JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home
+unset JAVA_HOME                         # see below - do NOT pin temurin-21 here
 ./gradlew chiseledBuild                 # build every cell in the matrix
 ./gradlew ":26.2-fabric:build"          # build one cell
 ./gradlew "Set active project to 1.21.4-fabric"   # switch the active cell (never hand-edit)
 ```
 
-Only JDK available in this environment is Temurin 21 - always export
-`JAVA_HOME` inline before any `./gradlew` invocation; never touch the
-Homebrew-default OpenJDK or install a system JDK.
+**`unset JAVA_HOME`, don't export it** (corrected 2026-08-13; earlier
+revisions of this file said to export Temurin 21, which is wrong for this
+repo now). The 26.x cells need Java 25, which is not installed system-wide
+- Gradle's foojay toolchain resolver downloads and caches it under
+`~/.gradle/jdks/`, but only if `JAVA_HOME` isn't pinned to 21 underneath it.
+Never install a system JDK or touch the Homebrew OpenJDK to satisfy this;
+the toolchain resolver is the supported path. (The sibling *plugin* repos in
+this program are the opposite case and do want the Temurin 21 export.)
 
 ### Tests & coverage
 
 ```sh
-export JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home
+unset JAVA_HOME                    # same toolchain rule as "Build commands" above
 ./gradlew ":1.21.4-fabric:test"    # run the JUnit 5 suite for one cell
 ./gradlew ":1.21.4-fabric:check"   # test + JaCoCo coverage verification (100% LINE, enforced)
 ./gradlew test                     # run the suite on EVERY cell in the matrix
@@ -231,7 +236,46 @@ exclusion further down `build.gradle.kts` still stands.
 - What Tier 1 does **not** cover: anything needing a window or a live
   `Minecraft` instance - `GameInfoHud`'s actual draw path, `PlatformCanvas`,
   `HudHooks`' registration against each loader's HUD event, and the
-  keybinding. Those are Tier 3 (client gametest under xvfb), not yet wired.
+  keybinding. Those are Tier 3, below.
+
+### Client gametests (Tier 3)
+
+```sh
+unset JAVA_HOME                                   # NOT temurin-21: 26.2 needs Java 25 (foojay-provisioned)
+./gradlew :26.2-fabric:runClientGameTest
+./gradlew :1.21.4-fabric:runClientGameTest
+```
+
+`src/gametest/java/.../SimpleUtilitiesClientGameTest.java` runs the mod in a
+**real Minecraft client** (window, GL context, render thread, world) via
+`fabric-client-gametest-api-v1`. Only the `1.21.4-fabric` and `26.2-fabric`
+cells support it - the API module does not exist below ~1.21.2 and is
+Fabric-only. Screenshots land in
+`versions/<cell>/build/run/clientGameTest/screenshots/`.
+
+**It asserts pixels, not just that the hook fired, and that distinction is
+load-bearing.** The first version asserted only `HudHooks.hasRendered()` and
+went green on 26.2 while the HUD was completely invisible - 26.x removed
+`Font.adjustColor`, which had been silently promoting this mod's alpha-0
+colours to opaque (see `Colors.opaqueIfNoAlpha` and PLAN.md "Tier 3" for the
+javap evidence and the fix). The test now takes overlay-off/overlay-off/
+overlay-on screenshots and requires the overlay to change pixels above the
+measured ambient noise floor. Verified by negative control: reverting the
+colour fix alone makes it fail with `attributable to the overlay = 0 px`.
+
+Two Stonecraft/Loom conflicts are undone for the `clientGameTest` config
+only, in an `afterEvaluate` block in `build.gradle.kts` - a duplicate
+`--username` that kills the launch, and a `runDir` repoint that would have
+**deleted the developer's own `run/` directory**. That block is written
+against Loom 1.17's `programArguments`/`runDirectory` Provider API; the
+sibling FlightHud repo's older `programArgs`/`runDir` form throws
+`UnsupportedOperationException` here.
+
+CI runs both cells under `xvfb-run` with software OpenGL - see
+`.github/workflows/build.yml`, rewritten in the same pass because upstream's
+version was `master`-triggered and could never have run in this fork.
+`release.yml` and `codeql-analysis.yml` are still stale for the same reason
+and were deliberately left alone.
 
 ## Version matrix
 
