@@ -1,20 +1,34 @@
-# END OF LIFE
+# Simple Utilities Mod
 
-# Consider using an [Simple Hud Enhanced](https://github.com/SoRadGaming/Simple-HUD-Enhanced) instead
+A maintained fork of
+[johnvictorfs/simple-utilities-mod](https://github.com/johnvictorfs/simple-utilities-mod).
+Upstream marked the mod end-of-life around Minecraft 1.20; this fork keeps
+it alive across modern Minecraft — **1.18.2 through 26.2, on Fabric, Forge,
+and NeoForge, from a single codebase**.
 
-*Adding this notice as of commit `5420a64d12e2738df9669c51b035e47e34876068` for the mod linked above*
+## Supported versions and loaders
 
-**This mod is unlikely to receive future changes and has pending unsolved issues I couldn't get around to fixing/adding.**
+Built with [Stonecutter](https://stonecutter.kikugie.dev/) +
+[Stonecraft](https://github.com/meza/stonecraft); all ten cells build and
+pass their test suites:
 
-The mod linked above has more features and lots of unsolved bugs are already fixed. UX is pretty much the same and any feature it has over this one are toggleable if you want a more minimal experience.
+| Minecraft | Fabric | NeoForge | Forge |
+|---|---|---|---|
+| 26.2 | ✅ | ✅ | — (NeoForge only, post-split) |
+| 1.21.4 | ✅ | ✅ | — |
+| 1.20.1 | ✅ | — | ✅ |
+| 1.19.4 | ✅ | — | ✅ |
+| 1.18.2 | ✅ | — | ✅ |
 
----
+Quilt runs the Fabric jars natively.
 
-# Simple Utilities Mod (Minecraft 1.15 - 1.20)
+Beyond the version matrix, the fork's main structural changes (detailed in
+`PLAN.md`/`CLAUDE.md`): the mod was rewritten Mixin-free against each
+loader's official HUD hook, migrated wholesale to Mojang mappings (Yarn
+stopped being published after 26.1), and the Forge/NeoForge and 26.x ports
+carry the **full** HUD + keybinding feature — no stub cells.
 
-Available to download from [Modrinth](https://modrinth.com/mod/simple-hud-utilities) or [Curseforge](https://www.curseforge.com/minecraft/mc-mods/simple-utilities).
-
-Built using the [Fabric Example Mod](https://github.com/FabricMC/fabric-example-mod) and made with the [Fabric](https://fabricmc.net) modding toolchain for Minecraft.
+## Features
 
 A Minecraft Mod that enhances the Game's HUD with some simple utilities like the following:
 
@@ -56,12 +70,37 @@ A Minecraft Mod that enhances the Game's HUD with some simple utilities like the
 Building from source
 </summary>
 
-- Clone the project with `git clone https://github.com/johnvictorfs/simple-utilities-mod.git`.
+- Clone the project with `git clone https://github.com/bshuler/simple-utilities-mod.git`.
 - Change to the project's directory with `cd simple-utilities-mod`.
-- Run `./gradlew build` to build the mod.
-- The built mod will be located in the `build/libs` folder.
-    - There will be two files. Use the one without `sources` in the filename.
+- `unset JAVA_HOME` (Gradle's toolchain resolver provisions the right JDK per version).
+- Run `./gradlew chiseledBuild` to build every version/loader, or
+  `./gradlew :1.21.4-fabric:build` for one.
+- Built jars land in `versions/<mc>-<loader>/build/libs/`.
+    - Use the one without `sources` in the filename.
 </details>
+
+---
+
+## Testing
+
+Three tiers, all run by CI (`.github/workflows/build.yml`):
+
+1. **Unit tests + coverage** — JUnit 5 over the pure logic (coordinate/time
+   math, config, colors), 100% line coverage enforced by JaCoCo, run in
+   **every one of the ten version×loader builds**.
+2. **Loaded-game tests** (`fabric-loader-junit`) — a real bootstrapped
+   Minecraft validates the mod's metadata, dependency ranges, and
+   version-split code against genuinely loaded game data, on every Fabric
+   cell.
+3. **Client gametests** (`fabric-client-gametest-api-v1`, 1.21.4 + 26.2) —
+   a **real Minecraft client** toggles the overlay and asserts the HUD
+   changed actual screen pixels above the measured noise floor. This tier
+   caught a real shipped bug: 26.x removed the vanilla behavior that had
+   been silently promoting the mod's alpha-0 colors to opaque, leaving the
+   HUD completely invisible while every other check stayed green. CI runs
+   it headless under xvfb and uploads the screenshots.
+
+Details and negative controls are in `PLAN.md`.
 
 ---
 
