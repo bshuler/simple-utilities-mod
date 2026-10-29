@@ -8,7 +8,7 @@ modId = "${id}"
 version = "${version}"
 displayName = "${name}"
 description = '''${description}'''
-authors = "johnvictorfs, Bert Shuler"
+authors = "johnvictorfs, human"
 displayURL = "https://github.com/bshuler/simple-utilities-mod"
 
 [[dependencies.${id}]]

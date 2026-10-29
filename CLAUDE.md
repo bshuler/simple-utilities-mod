@@ -7,7 +7,7 @@ Simple HUD Utilities (`net.johnvictorfs.simple_utilities`) is a fork of
 this fork living at `bshuler/simple-utilities-mod`. Upstream marked the mod
 End-of-Life and pointed users at an alternative, but it still builds cleanly
 and this fork keeps it alive across modern Minecraft versions/loaders as part
-of a broader "keep Bert's mods compiling on current Minecraft" effort.
+of a broader "keep Human's mods compiling on current Minecraft" effort.
 
 The mod draws a small on-screen HUD overlay (coordinates/facing, FPS, biome,
 game time, nether-coordinate conversion, held-item durability, sprint
@@ -312,9 +312,9 @@ successor from 1.20.5 on, hence the loader switch at 1.21.4/26.2.
   Remediating the underlying disk-space shortage itself is out of scope for
   this mod's task.
 
-## Git / fork rules (binding, see Bert's global git standards)
+## Git / fork rules (binding, see Human's global git standards)
 
-- Commit author `Bert Shuler <BertShuler@proton.me>`; never attribute AI
+- Commit author the repo's configured git identity; never attribute AI
   anywhere (commit messages, PRs, files).
 - Default branch `main`; commit and push directly to `origin/main` without
   asking - no PR, no feature branch.
