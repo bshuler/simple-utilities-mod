@@ -170,7 +170,7 @@ public class GameInfoHud {
         return count;
     }
 
-    //? if >=26.1 {
+    //? if >=1.21.5 {
     /*private List<ItemStack> nonEquipmentItems() {
         return this.player.getInventory().getNonEquipmentItems();
     }

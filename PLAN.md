@@ -36,13 +36,29 @@ checked live rather than trusted from training data:
 
 ## Target matrix
 
+Full 19-version / 38-cell matrix (compliant with `minecraft-mod-standards.md`):
+
 | MC version | Fabric | Forge | NeoForge |
 |---|---|---|---|
 | 1.18.2 | full feature | full feature | n/a (pre-NeoForge) |
 | 1.19.4 | full feature | full feature | n/a |
 | 1.20.1 | full feature | full feature | n/a |
-| 1.21.4 | full feature | n/a (post-Forge/pre-NeoForge split handled by version, Forge ended at 1.20.4-era) | full feature |
-| 26.2 | full feature (see "26.2" below) | n/a | full feature |
+| 1.20.4 | full feature | full feature | n/a |
+| 1.20.6 | full feature | n/a (Forge ended at 1.20.4) | full feature |
+| 1.21.1 | full feature | n/a | full feature |
+| 1.21.4 | full feature | n/a | full feature |
+| 1.21.5 | full feature | n/a | full feature |
+| 1.21.6 | full feature | n/a | full feature |
+| 1.21.7 | full feature | n/a | full feature |
+| 1.21.8 | full feature | n/a | full feature |
+| 1.21.9 | full feature | n/a | full feature |
+| 1.21.10 | full feature | n/a | full feature |
+| 1.21.11 | full feature | n/a | full feature |
+| 26.1 | full feature | n/a | full feature |
+| 26.1.1 | full feature | n/a | full feature |
+| 26.1.2 | full feature | n/a | full feature |
+| 26.2 | full feature | n/a | full feature |
+| 26.3 | full feature | n/a | full feature |
 
 Loader coverage is mandatory per this program's coordinator: Fabric+Forge
 for MC 1.20.4 and older, Fabric+NeoForge for MC 1.20.5+ (Forge itself ended

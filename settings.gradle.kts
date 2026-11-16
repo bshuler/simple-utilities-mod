@@ -50,12 +50,26 @@ stonecutter {
         // in the matrix, not just Fabric<26.1. See PLAN.md "26.2" for the
         // full writeup.
 
-        // 26.2 - Fabric + NeoForge (newest stable; full HUD+keybinding feature)
+        // 26.x - Fabric + NeoForge (newest stable; full HUD+keybinding feature)
         mc("26.3", "fabric", "neoforge")
         mc("26.2", "fabric", "neoforge")
-        // 1.21.4 - Fabric + NeoForge (last classic-numbered Yarn-mapped version)
+        mc("26.1.2", "fabric", "neoforge")
+        mc("26.1.1", "fabric", "neoforge")
+        mc("26.1", "fabric", "neoforge")
+        // 1.21.x - Fabric + NeoForge
+        mc("1.21.11", "fabric", "neoforge")
+        mc("1.21.10", "fabric", "neoforge")
+        mc("1.21.9", "fabric", "neoforge")
+        mc("1.21.8", "fabric", "neoforge")
+        mc("1.21.7", "fabric", "neoforge")
+        mc("1.21.6", "fabric", "neoforge")
+        mc("1.21.5", "fabric", "neoforge")
         mc("1.21.4", "fabric", "neoforge")
-        // 1.20.1 - Fabric + Forge (last major Forge version before NeoForge split)
+        mc("1.21.1", "fabric", "neoforge")
+        // 1.20.6 - Fabric + NeoForge
+        mc("1.20.6", "fabric", "neoforge")
+        // 1.20.4 & 1.20.1 - Fabric + Forge (Forge ended at the NeoForge split)
+        mc("1.20.4", "fabric", "forge")
         mc("1.20.1", "fabric", "forge")
         // 1.19.4 - Fabric + Forge
         mc("1.19.4", "fabric", "forge")

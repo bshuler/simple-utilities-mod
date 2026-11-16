@@ -64,7 +64,7 @@ public final class TextCompat {
      * {@code GameInfoHud} for the dimension id (nether-coordinate
      * conversion) and the biome registry key (biome name line).
      */
-    //? if >=26.1 {
+    //? if >=1.21.11 {
     /*public static String keyNamespace(ResourceKey<?> key) {
         return key.identifier().getNamespace();
     }

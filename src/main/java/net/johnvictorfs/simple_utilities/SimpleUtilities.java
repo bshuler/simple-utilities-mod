@@ -13,8 +13,10 @@ import net.minecraft.client.Minecraft;
 import org.lwjgl.glfw.GLFW;
 //?}
 
-//? if >=26.1 {
+//? if >=1.21.11 {
 /*import net.minecraft.resources.Identifier;
+*///?} elif >=1.21.9 {
+/*import net.minecraft.resources.ResourceLocation;
 *///?}
 
 //? if fabric {
@@ -183,9 +185,13 @@ implements ClientModInitializer
         /*KeyMapping.Category category =
                 KeyMapping.Category.register(Identifier.fromNamespaceAndPath(MODID, "hud"));
         toggleHudKey = new KeyMapping("key.simple_utilities.toggle_hud", InputConstants.KEY_K, category);
-        *///?} elif >=26.1 {
+        *///?} elif >=1.21.11 {
         /*KeyMapping.Category category =
                 KeyMapping.Category.register(Identifier.fromNamespaceAndPath(MODID, "hud"));
+        toggleHudKey = new KeyMapping("key.simple_utilities.toggle_hud", GLFW.GLFW_KEY_K, category);
+        *///?} elif >=1.21.9 {
+        /*KeyMapping.Category category =
+                KeyMapping.Category.register(ResourceLocation.fromNamespaceAndPath(MODID, "hud"));
         toggleHudKey = new KeyMapping("key.simple_utilities.toggle_hud", GLFW.GLFW_KEY_K, category);
         *///?} else {
         toggleHudKey = new KeyMapping(

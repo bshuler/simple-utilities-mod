@@ -279,28 +279,36 @@ and were deliberately left alone.
 
 ## Version matrix
 
-See PLAN.md for the full per-cell status table and rationale. Summary: 10
-cells (1.18.2/1.19.4/1.20.1 fabric+forge, 1.21.4/26.2 fabric+neoforge), all
-green. Quilt is not a separate cell - it runs Fabric jars natively. Forge
-existed only through 1.20.4-era Minecraft; NeoForge is the Forge-lineage
-successor from 1.20.5 on, hence the loader switch at 1.21.4/26.2.
+See PLAN.md for the full per-cell status table and rationale. Summary: 38
+cells across 19 Minecraft versions (`1.18.2`, `1.19.4`, `1.20.1`, `1.20.4`
+Fabric + Forge; `1.20.6`, `1.21.1`, `1.21.4`–`1.21.11`, `26.1`–`26.1.2`,
+`26.2`, `26.3` Fabric + NeoForge), all green. Quilt is not a separate cell -
+it runs Fabric jars natively. Forge existed only through 1.20.4-era Minecraft;
+NeoForge is the Forge-lineage successor from 1.20.5 on, hence the loader
+switch at 1.20.6+.
 
 ## Porting notes by MC version
 
-- **1.18.2 / 1.19.4 / 1.20.1** (Fabric + Forge): full HUD+keybinding
+- **1.18.2 / 1.19.4 / 1.20.1 / 1.20.4** (Fabric + Forge): full HUD+keybinding
   feature on both loaders. Forge's HUD registration API is itself
   version-split within this range at the 1.19 boundary (`OverlayRegistry`/
   `ForgeIngameGui` below it, `RegisterGuiOverlaysEvent`/`ForgeGui` at/above
-  it) - see `HudHooks.java`.
-- **1.21.4** (Fabric + NeoForge): last classic-numbered, Yarn-mapped-era
-  version (now built with Mojmap like everything else); full feature on
+  it) - see `HudHooks.java`. `getDebugOverlay().showDebugScreen()` replaced
+  `options.renderDebug` at `1.20.2` (`1.20.4`+ uses `getDebugOverlay()`).
+- **1.20.6 / 1.21.1 / 1.21.4–1.21.11** (Fabric + NeoForge): full feature on
   both loaders via `HudRenderCallback` (Fabric) and `RenderGuiEvent.Post`
-  (NeoForge).
-- **26.2** (Fabric + NeoForge): newest stable Minecraft. Yarn mappings are
-  no longer published for it, which is exactly why the whole mod moved to
-  Mojmap; full feature on both loaders (Fabric via `HudElementRegistry`,
-  since `HudRenderCallback` doesn't exist here; NeoForge unchanged from
-  1.21.4's `RenderGuiEvent.Post`). See PLAN.md "26.2" for the full writeup.
+  (NeoForge). Notable era boundaries inside `1.21.x`: `DeltaTracker` was
+  introduced at `1.21` (Fabric `HudRenderCallback` switched from `float` to
+  `DeltaTracker`), `Inventory.getNonEquipmentItems()` replaced `items` at
+  `1.21.5`, `GuiGraphics.drawString(...)` switched from `int` to `void` at
+  `1.21.6`, `KeyMapping.Category` was introduced at `1.21.9` (using
+  `ResourceLocation` in `1.21.9`–`1.21.10` and `Identifier` from `1.21.11`),
+  and `ResourceKey.identifier()` replaced `location()` at `1.21.11`.
+- **26.1 / 26.1.1 / 26.1.2 / 26.2 / 26.3** (Fabric + NeoForge): unobfuscated
+  era with `GuiGraphicsExtractor`. Yarn mappings are no longer published,
+  which is why the whole mod uses Mojmap; full feature on both loaders
+  (Fabric via `HudElementRegistry`, NeoForge via `RenderGuiEvent.Post`).
+  `26.3` is newest stable as of 2026-11. See PLAN.md for the full writeup.
 
 ## Environment notes
 

@@ -117,7 +117,12 @@ public final class PlatformCanvas implements SimpleCanvas {
 
     @Override
     public int drawText(Font font, String text, int x, int y, int color, boolean shadow) {
+        //? if >=1.21.6 {
+        /*context.drawString(font, text, x, y, Colors.opaqueIfNoAlpha(color), shadow);
+        return x + font.width(text);
+        *///?} else {
         return context.drawString(font, text, x, y, Colors.opaqueIfNoAlpha(color), shadow);
+        //?}
     }
 
     @Override

@@ -76,7 +76,7 @@ jobs:
         # Only the cells whose Fabric API bundle ships
         # fabric-client-gametest-api-v1 (first appears around fabric-api 0.106 /
         # MC 1.21.2) - see build.gradle.kts, `clientGameTestSupported`.
-        cell: ['1.21.4-fabric', '26.2-fabric']
+        cell: ['1.21.4-fabric', '26.2-fabric', '26.3-fabric']
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

@@ -2,7 +2,7 @@ package net.johnvictorfs.simple_utilities.hud;
 
 //? if fabric && <1.20 {
 /*import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
-*///?} elif fabric && <1.21.2 {
+*///?} elif fabric && <1.21 {
 /*import net.fabricmc.fabric.api.client.rendering.v1.HudRenderCallback;
 import net.minecraft.client.gui.GuiGraphics;
 *///?} elif fabric && >=26.1 {
@@ -16,8 +16,7 @@ import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.gui.GuiGraphics;
 //?}
 //? if neoforge {
-/*import net.minecraft.client.DeltaTracker;
-import net.neoforged.neoforge.client.event.RenderGuiEvent;
+/*import net.neoforged.neoforge.client.event.RenderGuiEvent;
 import net.neoforged.neoforge.common.NeoForge;
 *///?} elif forge && <1.19 {
 /*import com.mojang.blaze3d.vertex.PoseStack;
@@ -89,7 +88,7 @@ public final class HudHooks {
         // Minecraft.getDebugOverlay() only exists from 1.21.4 onward
         // (confirmed via javap); 1.18.2/1.19.4/1.20.1 use the plain
         // Options.renderDebug field instead.
-        //? if >=1.21 {
+        //? if >=1.20.2 {
         if (Minecraft.getInstance().getDebugOverlay().showDebugScreen()) {
             return;
         }
@@ -108,7 +107,7 @@ public final class HudHooks {
     public static void register() {
         //? if fabric && <1.20 {
         /*HudRenderCallback.EVENT.register((poseStack, tickDelta) -> render(new PlatformCanvas(poseStack)));
-        *///?} elif fabric && <1.21.2 {
+        *///?} elif fabric && <1.21 {
         /*HudRenderCallback.EVENT.register((GuiGraphics context, float tickDelta) ->
             render(new PlatformCanvas(context)));
         *///?} elif fabric && >=26.1 {
