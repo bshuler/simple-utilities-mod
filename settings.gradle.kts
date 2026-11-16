@@ -51,6 +51,7 @@ stonecutter {
         // full writeup.
 
         // 26.2 - Fabric + NeoForge (newest stable; full HUD+keybinding feature)
+        mc("26.3", "fabric", "neoforge")
         mc("26.2", "fabric", "neoforge")
         // 1.21.4 - Fabric + NeoForge (last classic-numbered Yarn-mapped version)
         mc("1.21.4", "fabric", "neoforge")

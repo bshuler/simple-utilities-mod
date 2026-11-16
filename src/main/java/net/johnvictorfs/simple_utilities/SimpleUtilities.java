@@ -7,7 +7,11 @@ import net.johnvictorfs.simple_utilities.hud.HudHooks;
 import net.johnvictorfs.simple_utilities.util.TextCompat;
 import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
+//? if >=26.3 {
+/*import com.mojang.blaze3d.platform.InputConstants;
+*///?} else {
 import org.lwjgl.glfw.GLFW;
+//?}
 
 //? if >=26.1 {
 /*import net.minecraft.resources.Identifier;
@@ -175,7 +179,11 @@ implements ClientModInitializer
     *///?}
 
     private static void setupKeyCode() {
-        //? if >=26.1 {
+        //? if >=26.3 {
+        /*KeyMapping.Category category =
+                KeyMapping.Category.register(Identifier.fromNamespaceAndPath(MODID, "hud"));
+        toggleHudKey = new KeyMapping("key.simple_utilities.toggle_hud", InputConstants.KEY_K, category);
+        *///?} elif >=26.1 {
         /*KeyMapping.Category category =
                 KeyMapping.Category.register(Identifier.fromNamespaceAndPath(MODID, "hud"));
         toggleHudKey = new KeyMapping("key.simple_utilities.toggle_hud", GLFW.GLFW_KEY_K, category);
